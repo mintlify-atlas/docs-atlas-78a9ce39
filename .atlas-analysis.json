@@ -1,0 +1,135 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "GSD",
+  "projectDescription": "A powerful meta-prompting, context engineering and spec-driven development system that enables agents to work for long periods of time autonomously without losing track of the big picture",
+  "theme": "aspen",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart",
+              "first-project"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/milestones-slices-tasks",
+              "concepts/state-machine",
+              "concepts/context-engineering",
+              "concepts/git-strategy",
+              "concepts/verification"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "commands/overview",
+              "commands/step-mode",
+              "commands/auto-mode",
+              "commands/discuss",
+              "commands/status-queue",
+              "commands/migrate",
+              "commands/doctor",
+              "commands/worktree",
+              "commands/preferences",
+              "commands/voice"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/long-running-work",
+              "guides/cost-tracking",
+              "guides/multi-terminal-workflow",
+              "guides/verification-uat",
+              "guides/recovery-troubleshooting",
+              "guides/model-selection",
+              "guides/migrating-from-v1"
+            ]
+          },
+          {
+            "group": "Extensions & Tools",
+            "pages": [
+              "extensions/overview",
+              "extensions/bundled-extensions",
+              "extensions/subagents",
+              "extensions/skills",
+              "extensions/custom-extensions"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/file-structure",
+              "architecture/loader-pattern",
+              "architecture/pi-sdk-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Extension API",
+            "pages": [
+              "api/extension-context",
+              "api/extension-api",
+              "api/hooks",
+              "api/context-injection",
+              "api/events"
+            ]
+          },
+          {
+            "group": "File Formats",
+            "pages": [
+              "api/state-md",
+              "api/roadmap-md",
+              "api/plan-md",
+              "api/summary-md",
+              "api/decisions-md",
+              "api/continue-md"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Autonomous multi-task execution with auto mode",
+    "Fresh context window per task with pre-loaded context",
+    "Branch-per-slice Git strategy with squash merging",
+    "Crash recovery with session forensics",
+    "Cost tracking with per-phase model selection",
+    "Stuck detection and timeout supervision",
+    "Milestone/slice/task hierarchy with verification",
+    "13 bundled extensions including browser tools and web search",
+    "Migration from v1 prompt framework"
+  ],
+  "publicApiSurface": [
+    "/gsd - Step mode execution",
+    "/gsd auto - Autonomous mode",
+    "/gsd next - Explicit step mode",
+    "/gsd stop - Stop auto mode",
+    "/gsd discuss - Architecture discussion",
+    "/gsd status - Progress dashboard",
+    "/gsd queue - Queue future milestones",
+    "/gsd prefs - Preferences and model selection",
+    "/gsd migrate - Migrate from v1",
+    "/gsd doctor - Validate .gsd/ integrity",
+    "/worktree - Git worktree lifecycle",
+    "/voice - Speech-to-text toggle",
+    "gsd config - Re-run setup wizard"
+  ]
+}
