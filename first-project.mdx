@@ -1,0 +1,580 @@
+---
+title: Your First Project
+description: Create a project from scratch, understand the discussion phase, run your first slice, and interpret the .gsd/ directory structure.
+---
+
+# Your First Project
+
+This guide walks you through creating a complete project with GSD — from initial discussion to your first completed slice.
+
+## Starting from Scratch
+
+Let's build a simple REST API for a todo application.
+
+<Steps>
+  <Step title="Create a new directory">
+    ```bash
+    mkdir todo-api
+    cd todo-api
+    ```
+  </Step>
+  
+  <Step title="Launch GSD">
+    ```bash
+    gsd
+    ```
+  </Step>
+  
+  <Step title="Start the discussion flow">
+    ```bash
+    /gsd
+    ```
+    
+    GSD detects no `.gsd/` directory and starts the discussion flow.
+  </Step>
+</Steps>
+
+## The Discussion Phase
+
+GSD will ask you a series of questions to understand your project. Here's what a typical conversation looks like:
+
+### Example Discussion
+
+```
+GSD: Let's start a new project. What are you building?
+
+You: I'm building a REST API for a todo app. Node.js, Express, PostgreSQL.
+     I want user authentication, CRUD operations for tasks, and the ability
+     to filter tasks by status and due date.
+
+GSD: Great. Any constraints I should know about? Timeline, team size,
+     existing code, deployment requirements?
+
+You: Solo project. I have 2 weeks. Deploying to Railway. No existing code.
+     Keep dependencies minimal.
+
+GSD: What about testing, error handling, and documentation?
+
+You: Unit tests for business logic. Error handling with proper status codes.
+     OpenAPI docs for the API.
+
+GSD: Understood. I'll start by researching Node.js/Express/PostgreSQL patterns
+     and drafting a roadmap. Run /gsd when you're ready to continue.
+```
+
+### What Gets Captured
+
+All your answers are written to `.gsd/M001-CONTEXT.md`:
+
+```markdown
+---
+milestone: 1
+type: context
+created: 2026-03-13T10:30:00Z
+---
+
+# Milestone 1 Context
+
+## What We're Building
+
+REST API for a todo application. Node.js, Express, PostgreSQL stack.
+
+Core features:
+- User authentication
+- CRUD operations for tasks
+- Filter tasks by status and due date
+
+## Constraints
+
+- Solo project
+- 2-week timeline
+- Deploying to Railway
+- Keep dependencies minimal
+
+## Quality Standards
+
+- Unit tests for business logic
+- Proper error handling with status codes
+- OpenAPI documentation
+```
+
+This file is **append-only**. If you have follow-up discussions (via `/gsd discuss`), new context is added below.
+
+<Note>
+You can skip the discussion flow entirely by writing `PROJECT.md`, `ROADMAP.md`, and `M001-CONTEXT.md` manually. GSD detects these files and picks up from there.
+</Note>
+
+## Research Phase
+
+After discussion, run `/gsd` again to start research:
+
+```bash
+/gsd
+```
+
+### What Happens During Research
+
+<Steps>
+  <Step title="Scout the codebase">
+    GSD uses the `scout` subagent to explore your project directory (if files exist) or create a baseline understanding
+  </Step>
+  <Step title="Search for patterns">
+    Looks for existing conventions, dependencies, and architecture patterns
+  </Step>
+  <Step title="Research ecosystem">
+    Uses web search and Context7 to find current best practices for your tech stack
+  </Step>
+  <Step title="Write research summary">
+    Outputs to `.gsd/M001-RESEARCH.md` with links, patterns, and recommendations
+  </Step>
+</Steps>
+
+### Example Research Output
+
+From `.gsd/M001-RESEARCH.md`:
+
+```markdown
+---
+milestone: 1
+type: research
+completed: 2026-03-13T10:35:00Z
+---
+
+# Milestone 1 Research
+
+## Codebase State
+
+Empty directory. Starting from scratch.
+
+## Tech Stack Research
+
+### Express.js (latest: 4.18.2)
+- Minimal, unopinionated framework
+- Middleware pattern for auth, validation, error handling
+- Common pattern: route → controller → service → model
+
+### PostgreSQL with Node.js
+- **pg** (node-postgres) — low-level driver
+- **Knex.js** — query builder + migrations (recommended for this project)
+- Avoid heavy ORMs given "minimal dependencies" constraint
+
+### Authentication
+- JWT tokens (jsonwebtoken + bcrypt for passwords)
+- Refresh token pattern for long-lived sessions
+
+## Recommended Slices
+
+1. Data model and database setup
+2. Authentication system (register, login, token refresh)
+3. Task CRUD endpoints
+4. Filtering and query logic
+5. OpenAPI documentation and error handling
+```
+
+## Planning Phase
+
+Run `/gsd` again to plan the first slice:
+
+```bash
+/gsd
+```
+
+GSD reads the research, drafts a roadmap, and plans the first slice.
+
+### Roadmap Structure
+
+From `.gsd/M001-ROADMAP.md`:
+
+```markdown
+---
+milestone: 1
+type: roadmap
+last_updated: 2026-03-13T10:40:00Z
+---
+
+# Milestone 1: Core API Functionality
+
+## Slices
+
+- [ ] **S01** — Data model and database setup
+      Risk: Low | Depends: None
+- [ ] **S02** — Authentication system
+      Risk: Medium | Depends: S01
+- [ ] **S03** — Task CRUD endpoints
+      Risk: Low | Depends: S01, S02
+- [ ] **S04** — Filtering and query logic
+      Risk: Medium | Depends: S03
+- [ ] **S05** — Error handling and OpenAPI docs
+      Risk: Low | Depends: S03, S04
+```
+
+### First Slice Plan
+
+From `.gsd/M001/S01-PLAN.md`:
+
+```markdown
+---
+slice: 1
+milestone: 1
+type: plan
+created: 2026-03-13T10:42:00Z
+---
+
+# S01: Data model and database setup
+
+## Objective
+
+Create the database schema, migration system, and core TypeScript types
+for users and tasks.
+
+## Task Breakdown
+
+### T01: Core types and interfaces
+
+**Must-haves:**
+- [ ] `src/types/user.ts` exists with User interface
+- [ ] `src/types/task.ts` exists with Task interface
+- [ ] Both types exported from `src/types/index.ts`
+- [ ] TypeScript compiles with no errors
+
+### T02: Database schema and migrations
+
+**Must-haves:**
+- [ ] Knex installed and configured
+- [ ] Migration file for users table (id, email, password_hash, created_at)
+- [ ] Migration file for tasks table (id, user_id, title, description, status, due_date)
+- [ ] `npm run migrate` executes without errors
+- [ ] Tables created in local PostgreSQL
+
+### T03: Database connection and query helpers
+
+**Must-haves:**
+- [ ] `src/db/connection.ts` exports configured Knex instance
+- [ ] `src/db/users.ts` exports findById, create, findByEmail functions
+- [ ] `src/db/tasks.ts` exports CRUD functions
+- [ ] All functions typed with interfaces from T01
+```
+
+<Tip>
+**Must-haves** are mechanically verifiable outcomes. GSD checks these before marking a task complete.
+</Tip>
+
+## Running Your First Slice
+
+You have two options:
+
+### Option 1: Step Through Each Task
+
+```bash
+/gsd
+```
+
+Run this three times — once per task. GSD will:
+1. Execute T01 in a fresh context window
+2. Pause and show what completed
+3. Wait for you to run `/gsd` again for T02
+4. Repeat for T03
+
+### Option 2: Auto Mode for the Entire Slice
+
+```bash
+/gsd auto
+```
+
+GSD will:
+1. Execute all three tasks sequentially
+2. Write a summary after each task
+3. Commit each task to the `gsd/M001/S01` branch
+4. Squash-merge the branch to `main` when the slice completes
+5. Write a UAT script for human verification
+6. Move to the next slice
+
+## Understanding Task Output
+
+After T01 completes, you'll see:
+
+```
+.gsd/
+  M001/
+    S01/
+      T01-PLAN.md         # What the task should do
+      T01-SUMMARY.md      # What actually happened
+```
+
+### Example Task Summary
+
+From `.gsd/M001/S01/T01-SUMMARY.md`:
+
+```markdown
+---
+task: 1
+slice: 1
+milestone: 1
+type: summary
+completed: 2026-03-13T11:05:00Z
+model: claude-sonnet-4-6
+tokens_in: 12543
+tokens_out: 2891
+cost_usd: 0.23
+---
+
+# T01: Core types and interfaces
+
+## What Was Done
+
+Created TypeScript interfaces for User and Task entities.
+
+### Files Created
+
+- `src/types/user.ts` — User interface with id, email, createdAt
+- `src/types/task.ts` — Task interface with id, userId, title, description, status, dueDate
+- `src/types/index.ts` — Barrel export for both types
+
+### Verification
+
+All must-haves satisfied:
+- [x] `src/types/user.ts` exists with User interface
+- [x] `src/types/task.ts` exists with Task interface  
+- [x] Both types exported from `src/types/index.ts`
+- [x] TypeScript compiles with no errors (`tsc --noEmit` passed)
+
+## Key Decisions
+
+- Used `status: 'pending' | 'in_progress' | 'completed'` union type for task status
+- Made `dueDate` optional since not all tasks have deadlines
+- Used `Date` type instead of string for timestamps (Knex will handle serialization)
+```
+
+<Note>
+The **YAML frontmatter** includes token usage and cost for the task. This feeds into the dashboard.
+</Note>
+
+## Git History After Slice Completion
+
+GSD automatically manages git branches and commits:
+
+```bash
+git log --oneline
+```
+
+```
+a1b2c3d feat(M001/S01): data model and database setup
+4d5e6f7 Initial commit
+```
+
+The slice appears as **one commit** on `main`. Individual task commits exist in the branch history before squash:
+
+```bash
+git log --oneline gsd/M001/S01  # Branch was deleted after merge
+```
+
+From the README (lines 250-264):
+
+```
+main:
+  docs(M001/S04): workflow documentation and examples
+  fix(M001/S03): bug fixes and doc corrections
+  feat(M001/S02): API endpoints and middleware
+  feat(M001/S01): data model and type system
+
+gsd/M001/S01 (deleted after merge):
+  feat(S01/T03): file writer with round-trip fidelity
+  feat(S01/T02): markdown parser for plan files
+  feat(S01/T01): core types and interfaces
+```
+
+## Verifying Slice Completion
+
+After the slice completes, GSD writes a **UAT (User Acceptance Test) script**:
+
+```
+.gsd/
+  M001/
+    S01-UAT.md
+```
+
+### Example UAT Script
+
+From `.gsd/M001/S01-UAT.md`:
+
+```markdown
+---
+slice: 1
+milestone: 1
+type: uat
+created: 2026-03-13T11:30:00Z
+---
+
+# S01: Data model and database setup — UAT
+
+## Prerequisites
+
+- PostgreSQL running locally
+- `.env` file with `DATABASE_URL`
+
+## Test Steps
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Run migrations:**
+   ```bash
+   npm run migrate
+   ```
+   
+   Expected: "Migration batch completed" message, no errors.
+
+3. **Verify tables exist:**
+   ```bash
+   psql $DATABASE_URL -c "\dt"
+   ```
+   
+   Expected: `users` and `tasks` tables listed.
+
+4. **Check TypeScript compilation:**
+   ```bash
+   npm run build
+   ```
+   
+   Expected: No errors, `dist/` directory created.
+
+5. **Verify type imports:**
+   ```bash
+   node -e "require('./dist/types/index.js'); console.log('OK')"
+   ```
+   
+   Expected: "OK" printed.
+
+## Success Criteria
+
+All steps complete without errors. Database schema matches plan.
+```
+
+<Warning>
+GSD cannot verify everything automatically. **UAT scripts are your responsibility.** Run them after each slice to catch issues early.
+</Warning>
+
+## What to Do When Something Goes Wrong
+
+### Task Fails Verification
+
+If a task doesn't satisfy its must-haves:
+
+1. GSD retries once with deep diagnostics
+2. If it fails again, auto mode stops
+3. You see: "Task T02 failed verification. Check .gsd/M001/S01/T02-SUMMARY.md"
+
+**Fix it manually:**
+
+```bash
+# Review what went wrong
+cat .gsd/M001/S01/T02-SUMMARY.md
+
+# Fix the issue
+vim src/db/migrations/001_create_users.js
+
+# Mark the task complete manually
+echo "[x]" >> .gsd/M001/S01-PLAN.md  # (or edit in your editor)
+
+# Resume
+/gsd auto
+```
+
+### Auto Mode Gets Stuck
+
+From the README (lines 118-119):
+
+```
+Stuck detection — If the same unit dispatches twice (the LLM didn't produce
+the expected artifact), it retries once with a deep diagnostic.
+```
+
+If GSD dispatches the same task twice and fails both times:
+
+```
+Auto mode paused: Task T03 stuck after retry.
+
+Expected artifact: .gsd/M001/S01/T03-SUMMARY.md
+Reason: Task did not complete verification checks.
+
+Run /gsd doctor to inspect state, or fix manually and /gsd auto to resume.
+```
+
+**Use `/gsd doctor` to diagnose:**
+
+```bash
+/gsd doctor
+```
+
+This validates `.gsd/` integrity and suggests fixes.
+
+### Session Crashes Mid-Task
+
+From the README (lines 116-117):
+
+```
+Crash recovery — A lock file tracks the current unit. If the session dies,
+the next /gsd auto reads the surviving session file and resumes with full context.
+```
+
+If GSD crashes (network error, timeout, etc.):
+
+1. Run `/gsd auto` again
+2. GSD reads the lock file and surviving session artifacts
+3. Synthesizes a recovery briefing from tool calls that made it to disk
+4. Resumes the task from where it crashed
+
+## Checking Progress
+
+Use the dashboard to see real-time progress:
+
+```bash
+Ctrl+Alt+G
+```
+
+Or from another terminal:
+
+```bash
+gsd
+/gsd status
+```
+
+### Example Dashboard Output
+
+```
+╭─────────────────────────────────────────────────────────────╮
+│ Milestone 1: Core API Functionality                        │
+│                                                             │
+│ Progress: ████████░░░░░░░░░░░░░░░░ 2/5 slices (40%)         │
+│                                                             │
+│ Current: S03 Task Execution — T02: Create task endpoint     │
+│ Elapsed: 42m 13s                                            │
+│                                                             │
+│ Cost breakdown:                                             │
+│   Research:   $1.23  (claude-sonnet-4-6)                    │
+│   Planning:   $2.45  (claude-opus-4-6)                      │
+│   Execution:  $8.91  (claude-sonnet-4-6)                    │
+│   Total:     $12.59                                         │
+│                                                             │
+│ Projection: ~$31.50 for full milestone                      │
+╰─────────────────────────────────────────────────────────────╯
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Learn the Commands" icon="terminal" href="/commands">
+    Full reference for `/gsd`, `/gsd auto`, `/gsd discuss`, and more
+  </Card>
+  <Card title="Understanding State" icon="file" href="/concepts/context-engineering">
+    Deep dive into `.gsd/` directory structure and state files
+  </Card>
+  <Card title="Auto Mode Deep Dive" icon="robot" href="/commands/auto-mode">
+    How the state machine works, timeout supervision, and recovery
+  </Card>
+  <Card title="Preferences" icon="sliders" href="/commands/preferences">
+    Configure models, budgets, timeouts, and skill discovery
+  </Card>
+</CardGroup>

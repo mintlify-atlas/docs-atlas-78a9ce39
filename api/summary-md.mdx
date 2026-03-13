@@ -1,0 +1,352 @@
+---
+title: 'summary.md'
+description: 'Task, slice, and milestone summary file formats with YAML frontmatter'
+icon: 'file-lines'
+---
+
+## Overview
+
+Summaries are the **compressed memory** of completed work. There are three types:
+
+1. **Task summaries** — `TNN-summary.md` in `.gsd/milestones/<MNN>/slices/<SNN>/tasks/`
+2. **Slice summaries** — `summary.md` in `.gsd/milestones/<MNN>/slices/<SNN>/`
+3. **Milestone summaries** — `summary.md` in `.gsd/milestones/<MNN>/`
+
+<Info>
+Summaries use **YAML frontmatter** for structured metadata and markdown for narrative content.
+</Info>
+
+## Task Summary Format
+
+### Structure
+
+```markdown
+---
+id: T01
+parent: S01
+milestone: M001
+provides:
+  - What this task built (~5 items)
+requires:
+  - slice: S00
+    provides: What that prior slice built that this task used
+affects: [S02, S03]
+key_files:
+  - path/to/important/file.ts
+key_decisions:
+  - "Decision made: reasoning"
+patterns_established:
+  - "Pattern name and where it lives"
+drill_down_paths:
+  - .gsd/milestones/M001/slices/S01/tasks/T01-plan.md
+duration: 15min
+verification_result: pass
+completed_at: 2026-03-07T16:00:00Z
+---
+
+# T01: Task Title
+
+**Substantive one-liner — NOT "task complete" but what actually shipped**
+
+## What Happened
+
+Concise prose narrative of what was built, why key decisions were made,
+and what matters for future work.
+
+## Deviations
+What differed from the plan and why (or "None").
+
+## Files Created/Modified
+- `path/to/file.ts` — What it does
+```
+
+### Frontmatter Fields
+
+<ResponseField name="id" type="string" required>
+  Task ID in format `T01`, `T02`, etc.
+</ResponseField>
+
+<ResponseField name="parent" type="string" required>
+  Parent slice ID in format `S01`
+</ResponseField>
+
+<ResponseField name="milestone" type="string" required>
+  Milestone ID in format `M001`
+</ResponseField>
+
+<ResponseField name="provides" type="array" required>
+  List of what this task built. Aim for ~5 items. These are used by downstream tasks to understand what's available.
+  
+  Examples:
+  - "JWT token generation with jose"
+  - "Token verification with expiration check"
+  - "Refresh rotation with family tracking"
+</ResponseField>
+
+<ResponseField name="requires" type="array">
+  What this task consumed from prior slices. Format:
+  ```yaml
+  - slice: S00
+    provides: What that prior slice built
+  ```
+</ResponseField>
+
+<ResponseField name="affects" type="array">
+  List of slice IDs that will likely need to consume outputs from this task. Format: `[S02, S03]`
+</ResponseField>
+
+<ResponseField name="key_files" type="array" required>
+  List of important file paths created or modified. Aim for ~10 items. These are entry points for future investigation.
+</ResponseField>
+
+<ResponseField name="key_decisions" type="array">
+  List of key decisions made during this task. Aim for ~5 items. Format: `"Decision made: reasoning"`
+  
+  Note: Significant decisions should also be appended to `.gsd/decisions.md`
+</ResponseField>
+
+<ResponseField name="patterns_established" type="array">
+  List of reusable patterns created. Aim for ~3 items. Format: `"Pattern name and where it lives"`
+</ResponseField>
+
+<ResponseField name="drill_down_paths" type="array" required>
+  Paths to related files for deeper investigation. Always include the task plan. Can include research, context, or other relevant files.
+</ResponseField>
+
+<ResponseField name="duration" type="string" required>
+  How long the task took. Format: `15min`, `2h`, etc.
+</ResponseField>
+
+<ResponseField name="verification_result" type="enum" required>
+  Verification outcome: `pass`, `fail`, or `partial`
+</ResponseField>
+
+<ResponseField name="completed_at" type="timestamp" required>
+  ISO 8601 timestamp of when the task completed.
+</ResponseField>
+
+### Content Requirements
+
+<Warning>
+**The one-liner must be substantive:** "JWT auth with refresh rotation using jose" not "Authentication implemented."
+</Warning>
+
+<ParamField path="One-liner" type="string" required>
+  Bold statement after the title. Must describe **what actually shipped**, not just "task complete."
+</ParamField>
+
+<ParamField path="What Happened" type="prose" required>
+  Concise narrative of:
+  - What was built
+  - Why key decisions were made
+  - What matters for future work
+  
+  Keep this compressed but informative.
+</ParamField>
+
+<ParamField path="Deviations" type="prose" required>
+  What differed from the plan and why. Write "None" if the plan was followed exactly.
+</ParamField>
+
+<ParamField path="Files Created/Modified" type="list" required>
+  List of files with brief descriptions of their purpose.
+</ParamField>
+
+## Slice Summary Format
+
+### Structure
+
+Similar to task summary but compresses all task summaries in the slice:
+
+```markdown
+---
+id: S01
+milestone: M001
+provides:
+  - What this slice built (~5-7 items, compressed from all tasks)
+requires:
+  - slice: S00
+    provides: What was consumed
+affects: [S02, S03]
+key_files:
+  - path/to/important/file.ts
+key_decisions:
+  - "Decision made: reasoning"
+patterns_established:
+  - "Pattern name and where it lives"
+drill_down_paths:
+  - .gsd/milestones/M001/slices/S01/tasks/T01-summary.md
+  - .gsd/milestones/M001/slices/S01/tasks/T02-summary.md
+duration: 2h
+verification_result: pass
+completed_at: 2026-03-07T18:00:00Z
+---
+
+# S01: Slice Title
+
+**Substantive one-liner for the entire slice**
+
+## What Happened
+
+Compressed narrative of all tasks in this slice.
+
+## Boundary Verification
+
+Did this slice produce what the boundary map promised?
+- ✓ types.ts exports User, Session, AuthToken
+- ✓ auth.ts exports generateToken, verifyToken, refreshToken
+
+## Deviations
+What differed from the plan and why.
+```
+
+### Key Differences
+
+- `id` is slice ID (e.g., `S01`)
+- `provides` compresses all task provides (~5-7 items total)
+- `drill_down_paths` points to task summaries, not plans
+- **Boundary Verification** section confirms boundary map contracts were met
+
+## Milestone Summary Format
+
+Updated **incrementally** each time a slice completes:
+
+```markdown
+---
+id: M001
+provides:
+  - What this milestone built so far (~10 items, compressed from all slices)
+key_files:
+  - path/to/important/file.ts
+key_decisions:
+  - "Decision made: reasoning"
+patterns_established:
+  - "Pattern name and where it lives"
+drill_down_paths:
+  - .gsd/milestones/M001/slices/S01/summary.md
+  - .gsd/milestones/M001/slices/S02/summary.md
+completed_slices: [S01, S02]
+remaining_slices: [S03, S04]
+last_updated: 2026-03-07T18:00:00Z
+---
+
+# M001: Milestone Title
+
+**High-level summary of milestone progress**
+
+## What's Built So Far
+
+Compressed narrative of completed slices.
+
+## Active Work
+
+Current slice and its status.
+```
+
+## Compression Rules
+
+<CardGroup cols={2}>
+  <Card title="Soft Caps" icon="gauge">
+    Aim for:
+    - ~5 provides per summary
+    - ~10 key_files per summary
+    - ~5 key_decisions per summary
+    - ~3 patterns_established per summary
+  </Card>
+  <Card title="When to Exceed" icon="arrow-up">
+    Exceed soft caps when genuinely needed, but don't let summaries become essays.
+  </Card>
+  <Card title="Total Budget" icon="coins">
+    Stay within ~2500 tokens of total injected summary context when loading for downstream work.
+  </Card>
+  <Card title="Drop Strategy" icon="scissors">
+    If dependency chain is too large, drop the oldest/least-relevant summaries first.
+  </Card>
+</CardGroup>
+
+## drill_down_paths Usage
+
+The `drill_down_paths` field enables **selective detail expansion**:
+
+1. Start by reading the **highest available level** (milestone summary)
+2. Only drill down to slice/task summaries if you need specific detail
+3. This prevents loading unnecessary context
+
+## Example Task Summary
+
+```markdown
+---
+id: T01
+parent: S01
+milestone: M001
+provides:
+  - JWT access token generation using jose/SignJWT
+  - TokenPair and JWTPayload TypeScript interfaces
+  - Token expiration set to 15min for access tokens
+  - Environment-based secret key management
+  - Unit test suite with 100% coverage
+requires: []
+affects: [S02, S03]
+key_files:
+  - src/lib/auth.ts
+  - src/types/auth.ts
+  - src/lib/auth.test.ts
+key_decisions:
+  - "Used jose instead of jsonwebtoken: better TypeScript support and maintained"
+  - "Access tokens expire in 15min: balance security and UX per industry standard"
+patterns_established:
+  - "Test pattern: lib/**/*.test.ts with vitest"
+drill_down_paths:
+  - .gsd/milestones/M001/slices/S01/tasks/T01-plan.md
+duration: 25min
+verification_result: pass
+completed_at: 2026-03-07T16:25:00Z
+---
+
+# T01: JWT Token Generation
+
+**Implemented JWT access token generation with jose library, HS256 signing, and full test coverage**
+
+## What Happened
+
+Built core JWT token generation using the jose library's SignJWT class. Tokens include standard claims (sub, iat, exp) and use HS256 signing with a secret key from environment variables. Implemented comprehensive unit tests covering success cases, expiration validation, and error handling.
+
+Chose jose over jsonwebtoken for its superior TypeScript support and active maintenance. Set access token expiration to 15 minutes following industry best practices for security/UX balance.
+
+## Deviations
+
+None — plan was followed exactly.
+
+## Files Created/Modified
+- `src/lib/auth.ts` — JWT generation with generateToken function (87 lines)
+- `src/types/auth.ts` — TypeScript interfaces for TokenPair and JWTPayload
+- `src/lib/auth.test.ts` — Unit tests with 100% coverage (62 lines, 7 test cases)
+```
+
+## When to Write
+
+<CardGroup cols={3}>
+  <Card title="Task Summary" icon="check">
+    Written immediately after task verification passes during the **Summarize** phase.
+  </Card>
+  <Card title="Slice Summary" icon="layer-group">
+    Written when all tasks in a slice complete during the **Advance** phase.
+  </Card>
+  <Card title="Milestone Summary" icon="flag">
+    Updated incrementally each time a slice completes.
+  </Card>
+</CardGroup>
+
+## Related Files
+
+<CardGroup cols={3}>
+  <Card title="plan.md" href="/api/plan-md" icon="clipboard-list">
+    Task plans (input to execution)
+  </Card>
+  <Card title="roadmap.md" href="/api/roadmap-md" icon="map">
+    Slice definitions and boundary map
+  </Card>
+  <Card title="decisions.md" href="/api/decisions-md" icon="scale-balanced">
+    Decisions register
+  </Card>
+</CardGroup>

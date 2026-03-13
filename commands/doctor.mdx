@@ -1,0 +1,440 @@
+---
+title: Doctor
+description: Validate project integrity and fix common issues
+icon: stethoscope
+---
+
+`/gsd doctor` validates your GSD project structure, identifies integrity issues, and can automatically fix safe problems.
+
+## Commands
+
+<ParamField path="/gsd doctor" type="command">
+  Run diagnostic scan and show report (no changes made)
+</ParamField>
+
+<ParamField path="/gsd doctor audit" type="command">
+  Full audit — includes warnings (default shows errors only)
+</ParamField>
+
+<ParamField path="/gsd doctor fix" type="command">
+  Auto-fix safe issues (missing files, malformed state)
+</ParamField>
+
+<ParamField path="/gsd doctor heal" type="command">
+  Dispatch LLM-guided healing for complex issues
+</ParamField>
+
+<ParamField path="/gsd doctor <scope>" type="command">
+  Scope diagnostics to specific milestone or slice (e.g., `M001`, `M001/S02`)
+</ParamField>
+
+## What Doctor Checks
+
+### Project-Level
+
+- **Preferences file** — Valid YAML, correct schema
+- **State file** — Matches derived state from roadmaps and plans
+- **Decisions register** — Properly formatted, no orphaned entries
+
+### Milestone-Level
+
+- **Roadmap integrity** — All slices have valid IDs and titles
+- **Slice completion** — If all slices done, milestone summary must exist
+- **Dependency resolution** — `depends_on` references point to valid milestones
+
+### Slice-Level
+
+- **Task directory** — Exists when slice plan exists
+- **Task completion** — If all tasks done, slice summary and UAT must exist
+- **Roadmap marking** — Slice checkbox in roadmap matches slice state
+
+### Task-Level
+
+- **Summary files** — If task marked done, summary must exist
+- **Must-have verification** — Task summary mentions must-haves from plan
+- **Frontmatter** — Valid YAML with required fields
+
+## Severity Levels
+
+### Error 🔴
+
+Blocks forward progress. Auto mode will fail.
+
+**Examples:**
+
+- Task marked `[x]` in plan but no summary file
+- All tasks done but slice not marked `[x]` in roadmap
+- Slice marked `[x]` in roadmap but no UAT file
+
+### Warning 🟡
+
+Should be fixed but doesn't block execution.
+
+**Examples:**
+
+- Task summary exists but plan not marked `[x]`
+- Missing task plan file (task directory exists but `TX-PLAN.md` missing)
+- Must-haves in plan not verified in summary
+
+### Info ℹ️
+
+Advisory only. No action needed.
+
+**Examples:**
+
+- Preference file uses legacy path (`~/.pi/agent/gsd-preferences.md`)
+- Research file empty (valid for milestones that don't need research)
+
+## Basic Usage
+
+### Diagnostic Scan (No Changes)
+
+```bash
+/gsd doctor
+```
+
+**Output:**
+
+```
+🔍 GSD doctor — scanning project...
+
+✓ Scanned: 1 milestone, 5 slices, 18 tasks
+
+🔴 Found 3 errors:
+
+  • M001/S02/T03: Task marked done but no summary file
+    Expected: .gsd/milestones/M001/slices/S02/tasks/T03-SUMMARY.md
+
+  • M001/S03: All tasks complete but slice not checked in roadmap
+    Fix: Mark S03 as [x] in M001-ROADMAP.md
+
+  • M001/S03: All tasks complete but no UAT file
+    Expected: .gsd/milestones/M001/slices/S03/S03-UAT.md
+
+Run with --fix to auto-repair:
+  /gsd doctor fix
+
+Or dispatch LLM-guided healing:
+  /gsd doctor heal
+```
+
+### Auto-Fix
+
+```bash
+/gsd doctor fix
+```
+
+**What gets fixed:**
+
+- **Missing STATE.md** — Rebuilt from current roadmaps and plans
+- **Missing slice summaries** — Placeholder stub created
+- **Missing UAT files** — Placeholder stub created
+- **Roadmap checkboxes** — Updated to match actual completion state
+
+**What does not get fixed:**
+
+- **Missing task summaries** — Requires LLM to write (use `doctor heal`)
+- **Must-have verification** — Requires code inspection (use `doctor heal`)
+- **Invalid preferences** — Requires human review
+
+### LLM-Guided Healing
+
+```bash
+/gsd doctor heal
+```
+
+**Flow:**
+
+1. Doctor identifies actionable issues (errors + critical warnings)
+2. Formats them into a structured prompt
+3. Dispatches to the LLM with context:
+   - Issue descriptions
+   - Expected files
+   - Existing artifacts (plans, code)
+4. LLM writes missing files or fixes malformed content
+5. Doctor re-runs to validate fixes
+
+**Use for:**
+
+- Missing task summaries (LLM reconstructs from git history)
+- Incomplete UAT files (LLM derives test cases from slice plan)
+- Must-have verification gaps (LLM inspects code and confirms)
+
+## Scoped Diagnostics
+
+### Milestone Scope
+
+```bash
+/gsd doctor M001
+```
+
+Checks only milestone M001 and its slices.
+
+### Slice Scope
+
+```bash
+/gsd doctor M001/S02
+```
+
+Checks only slice S02 and its tasks.
+
+### Active Scope (Default)
+
+With no scope argument, doctor checks:
+
+- Active milestone (if one exists)
+- All blocking issues across the project
+
+## Audit Mode
+
+```bash
+/gsd doctor audit
+```
+
+Shows **all issues**, including warnings and info:
+
+```
+🔍 GSD doctor audit — full scan...
+
+✓ Scanned: 1 milestone, 5 slices, 18 tasks
+
+🔴 3 errors
+🟡 5 warnings
+ℹ️  2 info
+
+🔴 Errors:
+  • M001/S02/T03: Task done missing summary
+  • M001/S03: All tasks done missing slice UAT
+  • M001/S03: Slice checked but no UAT file
+
+🟡 Warnings:
+  • M001/S01/T02: Task summary exists but plan not marked [x]
+  • M001/S02: Slice plan missing task T04
+  • M001/S04/T01: Must-haves not verified in summary
+
+ℹ️  Info:
+  • Global preferences using legacy path (~/.pi/agent/gsd-preferences.md)
+  • M001 research file empty (no research conducted)
+
+Fix errors first:
+  /gsd doctor fix
+```
+
+## Common Issues
+
+### Issue: Task Done Missing Summary
+
+**Diagnostic:**
+
+```
+🔴 M001/S02/T03: Task marked done but no summary file
+  Expected: .gsd/milestones/M001/slices/S02/tasks/T03-SUMMARY.md
+```
+
+**Cause:** Task plan has `[x]` checkbox, but no summary was written.
+
+**Fix:**
+
+- **Manual:** Write the summary file
+- **Auto (heal):** `/gsd doctor heal` — LLM reconstructs from git history
+
+### Issue: All Tasks Done Missing Slice UAT
+
+**Diagnostic:**
+
+```
+🔴 M001/S03: All tasks complete but no UAT file
+  Expected: .gsd/milestones/M001/slices/S03/S03-UAT.md
+```
+
+**Cause:** All tasks in slice are marked `[x]`, but UAT (user acceptance test) wasn't created.
+
+**Fix:**
+
+- **Auto (fix):** `/gsd doctor fix` — Creates placeholder stub
+- **Auto (heal):** `/gsd doctor heal` — LLM derives real test cases from slice plan
+
+### Issue: Slice Checked Missing UAT
+
+**Diagnostic:**
+
+```
+🔴 M001/S02: Slice checked in roadmap but no UAT file
+  Expected: .gsd/milestones/M001/slices/S02/S02-UAT.md
+```
+
+**Cause:** Roadmap marks slice as `[x]` done, but UAT file is missing.
+
+**Fix:**
+
+- **Manual:** Write `S02-UAT.md` with test cases
+- **Auto (heal):** `/gsd doctor heal`
+
+### Issue: Task Summary Without Done Checkbox
+
+**Diagnostic:**
+
+```
+🟡 M001/S01/T02: Task summary exists but plan not marked [x]
+```
+
+**Cause:** Summary file exists (task completed), but plan still shows `[ ]` (not done).
+
+**Fix:**
+
+- **Auto (fix):** `/gsd doctor fix` — Updates plan checkbox to `[x]`
+
+### Issue: Must-Haves Not Verified
+
+**Diagnostic:**
+
+```
+🟡 M001/S02/T01: Must-haves not verified in summary
+  Plan specifies 3 must-haves, summary mentions 1
+```
+
+**Cause:** Task plan lists must-haves (truths, artifacts, key links), but summary doesn't verify all of them.
+
+**Fix:**
+
+- **Manual:** Edit summary to include verification for all must-haves
+- **Auto (heal):** `/gsd doctor heal` — LLM inspects code and updates summary
+
+### Issue: Invalid Preferences
+
+**Diagnostic:**
+
+```
+🔴 Preferences: skill_rules must be a list
+  Found: skill_rules: "always use docs"
+  Expected: skill_rules: ["always use docs"]
+```
+
+**Cause:** Preferences file has invalid YAML or incorrect schema.
+
+**Fix:**
+
+- **Manual:** Edit `.gsd/preferences.md` to fix YAML
+- **Not auto-fixable** (requires human judgment)
+
+## Heal Mode Details
+
+### When to Use Heal
+
+Use `doctor heal` for issues that require **LLM reasoning**:
+
+- Reconstructing task summaries from git history
+- Deriving UAT test cases from slice plans
+- Verifying must-haves by inspecting code
+- Fixing malformed frontmatter in summaries
+
+### How Heal Works
+
+```
+/gsd doctor heal
+
+🔍 Identifying actionable issues...
+
+  Found: 3 errors, 1 critical warning
+
+🧑‍⚕️ Dispatching LLM-guided heal...
+
+  • M001/S02/T03: Reconstruct summary from git history
+  • M001/S03: Generate UAT from slice plan
+  • M001/S02/T01: Verify must-haves in code
+
+LLM working...
+
+✓ Heal complete. Re-running doctor...
+
+🔍 GSD doctor — scanning project...
+
+✓ No issues found. Project integrity validated.
+```
+
+### Heal Prompt
+
+The LLM receives:
+
+- Doctor summary (list of issues)
+- Structured issue details (file paths, expected content)
+- Relevant context (plans, roadmaps, git history)
+- Instructions to write missing files or fix content
+
+The LLM reads existing artifacts, inspects code, and produces the missing files.
+
+## Doctor + Auto Mode
+
+Doctor runs **automatically before auto mode starts**:
+
+```bash
+/gsd auto
+
+🔍 Pre-flight check...
+
+🔴 Found 2 errors. Run doctor to fix:
+
+  /gsd doctor fix
+
+Auto mode blocked until issues are resolved.
+```
+
+This prevents auto mode from running on corrupted state.
+
+## State Rebuild
+
+Doctor can **rebuild STATE.md** from scratch:
+
+```bash
+/gsd doctor fix
+```
+
+If `STATE.md` is missing or stale, doctor re-derives it from:
+
+- Roadmaps (milestone and slice state)
+- Slice plans (task state)
+- Summaries (completion markers)
+- DECISIONS.md (recent decisions)
+
+This is safe to run anytime. STATE.md is always regenerated, never edited by hand.
+
+## Exit Codes
+
+When run as a CLI command (not in interactive mode):
+
+| Exit Code | Meaning |
+|-----------|----------|
+| `0` | No issues found |
+| `1` | Warnings only |
+| `2` | Errors found (blocks auto mode) |
+
+Useful for CI:
+
+```bash
+gsd doctor audit
+if [ $? -eq 2 ]; then
+  echo "GSD integrity check failed"
+  exit 1
+fi
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Auto mode pre-flight runs doctor automatically
+  </Card>
+  <Card title="Migrate" icon="right-left" href="/commands/migrate">
+    Validate migrated projects with doctor
+  </Card>
+  <Card title="Status" icon="gauge" href="/commands/status-queue">
+    Check completion state and progress
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Run `/gsd doctor` after migration or manual edits
+2. Use `/gsd doctor fix` for safe auto-repairs
+3. Use `/gsd doctor heal` for complex issues
+4. Run `/gsd auto` — doctor validates automatically

@@ -1,0 +1,304 @@
+---
+title: "Milestones, Slices, and Tasks"
+description: "Understanding GSD's three-level work hierarchy and the iron rule that keeps tasks manageable"
+---
+
+## The Hierarchy
+
+GSD structures work into three levels:
+
+```
+Milestone  →  a shippable version (4-10 slices)
+  Slice    →  one demoable vertical capability (1-7 tasks)
+    Task   →  one context-window-sized unit of work
+```
+
+**The iron rule:** A task MUST fit in one context window. If it can't, it's two tasks.
+
+## Why This Structure?
+
+The hierarchy solves three problems:
+
+1. **Context budget** — LLMs have finite context windows. Tasks that exceed the window produce degraded output.
+2. **Resumability** — Work interrupted mid-task can resume cleanly because task boundaries are natural checkpoints.
+3. **Verification** — Smaller units are easier to verify mechanically. You know when a task is actually done.
+
+## Milestones
+
+A milestone is **a shippable version** of your project — a meaningful release that users could actually use.
+
+### Characteristics
+
+- Contains 4-10 slices
+- Has a clear vision and success criteria
+- Produces a `ROADMAP.md` during planning
+- Results in one clean commit per slice on `main` after squash merge
+
+### File Artifacts
+
+```
+.gsd/milestones/M001-PAYMENT-INTEGRATION/
+  ROADMAP.md       # Milestone plan with slice checkboxes
+  CONTEXT.md       # User decisions from discuss phase (optional)
+  RESEARCH.md      # Codebase/ecosystem research (optional)
+  SUMMARY.md       # Rollup of all slice outcomes (written on completion)
+  slices/          # Slice subdirectories
+```
+
+### Example Milestone Vision
+
+From the GSD-WORKFLOW.md:
+
+> **Vision:** Users can authenticate, create projects, and manage their workspace through a web interface backed by a persistent database.
+>
+> **Success Criteria:**
+> - User can sign up with email and password
+> - User can log in and receive a session token
+> - User can create and list projects in their workspace
+
+## Slices
+
+A slice is **one demoable vertical capability** — something you can show working end-to-end when it's complete.
+
+### Characteristics
+
+- Contains 1-7 tasks
+- Produces a working, demonstrable feature (not just a layer or foundation)
+- Has a demo sentence: "After this: user can sign up and receive a confirmation email"
+- Each slice gets its own git branch (`gsd/M001/S01`)
+- Ordered by risk (highest risk first to validate feasibility early)
+
+### The "After This" Test
+
+Every slice must answer: **"After this slice is done, what can the user demo?"**
+
+Good demo sentences:
+- ✅ "After this: user can sign up with email and see the dashboard"
+- ✅ "After this: API returns paginated project lists with proper auth"
+- ✅ "After this: daemon auto-reconnects after network interruption"
+
+Bad demo sentences:
+- ❌ "After this: types and interfaces are defined" (not demoable)
+- ❌ "After this: foundation is in place" (what does that mean?)
+- ❌ "After this: refactoring complete" (no user-visible outcome)
+
+### File Artifacts
+
+```
+.gsd/milestones/M001-PAYMENT-INTEGRATION/slices/S01-STRIPE-INTEGRATION/
+  PLAN.md          # Task decomposition with must-haves
+  CONTEXT.md       # Slice-level user decisions (optional)
+  RESEARCH.md      # Slice-level research (optional)
+  SUMMARY.md       # Slice summary (written on completion)
+  UAT.md           # Human test script (written on completion)
+  tasks/           # Individual task plans and summaries
+```
+
+### Slice Metadata
+
+In `ROADMAP.md`, each slice has inline metadata:
+
+```markdown
+- [ ] **S01: Stripe Integration** `risk:high` `depends:[]`
+  > After this: user can complete a test payment and see confirmation
+
+- [ ] **S02: Payment History UI** `risk:medium` `depends:[S01]`
+  > After this: user can view past payments in the dashboard
+```
+
+**Risk levels:**
+- `risk:high` — Uncertain, might invalidate downstream work, needs proof early
+- `risk:medium` — Some unknowns but path is clear
+- `risk:low` — Straightforward implementation
+
+**Dependencies:**
+- `depends:[]` — No other slices required
+- `depends:[S01]` — S01 must be complete before this starts
+- `depends:[S01,S02]` — Both S01 and S02 must be complete
+
+## Tasks
+
+A task is **one context-window-sized unit of work** — the smallest unit of execution in GSD.
+
+### Characteristics
+
+- Fits in one context window (~200k tokens with current models)
+- Has 3-10 concrete steps
+- Includes mechanically verifiable must-haves
+- Results in one commit on the slice branch
+- Takes minutes to hours, not days
+
+### The Iron Rule
+
+**If a task can't fit in one context window, it's two tasks.**
+
+This is non-negotiable. GSD's auto mode gives each task a fresh context window. If the plan, relevant summaries, and execution don't fit, the task is over-scoped.
+
+### File Artifacts
+
+```
+.gsd/milestones/M001/slices/S01/tasks/
+  T01-PLAN.md      # Task plan with steps and must-haves
+  T01-SUMMARY.md   # What happened (YAML frontmatter + narrative)
+  T02-PLAN.md
+  T02-SUMMARY.md
+```
+
+### Task Plan Structure
+
+From the GSD-WORKFLOW.md:
+
+```markdown
+# T01: JWT Authentication Helpers
+
+**Slice:** S01 — User Authentication
+**Milestone:** M001
+
+## Description
+Build JWT token generation and verification functions with proper
+secret handling and expiry validation.
+
+## Steps
+1. Install jose library for JWT handling
+2. Create auth.ts with generateToken() and verifyToken()
+3. Add environment variable for JWT_SECRET
+4. Write unit tests for token lifecycle
+5. Verify tokens work with sample payloads
+
+## Must-Haves
+- [ ] File `src/lib/auth.ts` exists with real implementation (min 30 lines)
+- [ ] Exports: generateToken(userId), verifyToken(token)
+- [ ] Tests pass for token generation and verification
+- [ ] Invalid tokens are rejected properly
+
+## Verification
+- Run `npm test -- auth.test.ts`
+- Generate a token, verify it returns the correct userId
+- Verify expired tokens are rejected
+```
+
+### Must-Haves: The Verification Contract
+
+Every task defines **must-haves** — mechanically checkable outcomes. These fall into three categories:
+
+<CardGroup cols={3}>
+  <Card title="Truths" icon="check-circle">
+    Observable behaviors that must be true when done:
+    - "User can sign up with email and password"
+    - "Login returns a JWT token"
+    - "Tests pass for auth module"
+  </Card>
+  <Card title="Artifacts" icon="file-code">
+    Files that must exist with real implementation (not stubs):
+    - `src/lib/auth.ts` — JWT helpers (min 30 lines)
+    - `src/app/api/login/route.ts` — Login endpoint
+  </Card>
+  <Card title="Key Links" icon="link">
+    Critical wiring between artifacts:
+    - `login/route.ts` imports `generateToken` from `auth.ts`
+    - `middleware.ts` imports `verifyToken` from `auth.ts`
+  </Card>
+</CardGroup>
+
+Must-haves make verification **mechanically checkable**. The agent doesn't guess if a task is done — it runs the checks.
+
+## Decomposing Work
+
+### Milestone → Slices
+
+When planning a milestone:
+
+1. **Read the vision and success criteria**
+2. **Identify 4-10 vertical slices** that each produce something demoable
+3. **Order by risk** — highest risk first to validate feasibility early
+4. **Define dependencies** — which slices need others to be complete first
+5. **Write the boundary map** (see [Git Strategy](/concepts/git-strategy))
+
+**Anti-pattern:** Don't decompose into layers ("data model", "API", "UI"). Each slice should cut through all necessary layers to produce a working feature.
+
+### Slice → Tasks
+
+When planning a slice:
+
+1. **Read the slice's demo sentence** — know what "done" looks like
+2. **Read the boundary map** — know what this slice must produce for downstream slices
+3. **Decompose into 1-7 tasks** that each fit one context window
+4. **Each task should produce a real increment** toward the slice goal
+5. **Define must-haves** for each task
+
+**Anti-pattern:** Don't create tasks like "research", "plan", "implement". Each task should ship code that moves the slice closer to its demo.
+
+### How Small is Too Small?
+
+A task is too small if:
+- It takes less than 5 minutes
+- It produces no verifiable artifact
+- It exists only to satisfy process, not to ship value
+
+A task is too large if:
+- The plan + context + execution exceeds one context window
+- It has more than 10 steps
+- It touches more than 12 files
+- It takes multiple sessions to complete
+
+## Example Hierarchy
+
+Here's a real example from a project:
+
+```
+M001: User Authentication and Projects
+  ├─ S01: JWT Authentication Flow
+  │   ├─ T01: JWT token generation and verification helpers
+  │   ├─ T02: Login and signup API endpoints
+  │   └─ T03: Session middleware with token validation
+  │
+  ├─ S02: User Registration UI
+  │   ├─ T01: Signup form with validation
+  │   ├─ T02: Email confirmation flow
+  │   └─ T03: Error handling and user feedback
+  │
+  └─ S03: Project CRUD Operations
+      ├─ T01: Database schema and migrations
+      ├─ T02: Project creation and listing endpoints
+      └─ T03: Dashboard page with project list
+```
+
+Notice:
+- Each slice is independently demoable
+- S02 and S03 depend on S01 (they need auth)
+- Each task fits in one context window
+- Each task produces verifiable artifacts
+
+## Practical Guidelines
+
+<AccordionGroup>
+  <Accordion title="How do I know if a slice is well-scoped?">
+    Ask: "If I complete every task in this slice exactly as written, can I demo the 'After this' sentence?"
+    
+    If yes → good scope.
+    
+    If no → either the tasks are wrong, or the demo sentence is wrong.
+  </Accordion>
+
+  <Accordion title="Can I have a slice with just one task?">
+    Yes, if the slice is simple enough. But if a slice consistently has only one task, you might be slicing too small — consider combining it with another slice.
+  </Accordion>
+
+  <Accordion title="Can I add tasks mid-slice?">
+    Yes. If execution reveals more work than expected, add tasks to the `PLAN.md`. But if you're adding many tasks, the slice might have been under-planned — consider writing a new plan.
+  </Accordion>
+
+  <Accordion title="What if a task reveals the slice plan is wrong?">
+    Set `blocker_discovered: true` in the task summary and describe the issue. GSD will automatically trigger a slice replan.
+  </Accordion>
+</AccordionGroup>
+
+## Why This Works
+
+The three-level hierarchy isn't arbitrary. It maps to three natural constraints:
+
+1. **Milestones** map to **release cycles** — what users see shipped
+2. **Slices** map to **feature completeness** — what's demoable
+3. **Tasks** map to **context windows** — what fits in one agent session
+
+By respecting these constraints, GSD keeps work manageable, verifiable, and resumable at any level.

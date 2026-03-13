@@ -1,0 +1,102 @@
+---
+title: Extensions Overview
+description: How GSD extends agent capabilities through bundled tools, skills, and custom extensions
+---
+
+GSD bundles 13 extensions that give the agent specialized capabilities beyond basic file and command operations. These extensions integrate directly with the [Pi SDK](https://github.com/badlogic/pi-mono), which provides the agent harness and extension system.
+
+## What Are Extensions?
+
+Extensions are Pi SDK packages that add:
+
+- **Tools** — Agent-callable functions (browser automation, web search, etc.)
+- **Commands** — User-invoked slash commands (`/gsd`, `/voice`, `/worktree`)
+- **Hooks** — Lifecycle listeners (session start, agent end, context compaction)
+- **UI Components** — Custom overlays, widgets, and input handlers
+
+GSD loads extensions automatically from `~/.gsd/agent/extensions/`. The bundled extensions ship with the GSD package and sync on every launch.
+
+## Why Bundle Extensions?
+
+GSD's workflow requires capabilities that don't exist in base Pi:
+
+1. **Browser verification** — UI testing without human inspection
+2. **Web research** — Current documentation and ecosystem knowledge
+3. **Process management** — Long-running dev servers and watch modes
+4. **Subagent delegation** — Isolated context windows for scouting and research
+5. **Voice input** — Hands-free interaction during long builds
+6. **Git worktrees** — Parallel work on multiple slices
+
+By bundling these tools, GSD works out of the box without setup or configuration.
+
+## Extension Discovery
+
+GSD discovers extensions from three sources:
+
+| Source | Path | When to Use |
+|--------|------|-------------|
+| **Bundled** | `~/.gsd/agent/extensions/` | Automatically loaded |
+| **User-global** | `~/.pi/extensions/` | Personal extensions for all Pi sessions |
+| **Project-local** | `.gsd/extensions/` | Project-specific tools (committed to repo) |
+
+Bundled extensions are always-overwrite synced on launch. User and project extensions are loaded as-is.
+
+## Extension Lifecycle
+
+```
+gsd launch
+  ↓
+Sync bundled extensions → ~/.gsd/agent/extensions/
+  ↓
+Load Pi SDK
+  ↓
+Discover all extensions (bundled + user + project)
+  ↓
+Register tools/commands/hooks
+  ↓
+Start interactive session
+```
+
+Extensions are loaded before the first agent session starts. Tools registered by extensions appear in the agent's tool catalog immediately.
+
+## Pi SDK Integration
+
+GSD extensions use the Pi SDK's `ExtensionAPI` interface:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  // Register tools
+  pi.registerTool({
+    name: "example_tool",
+    description: "What this tool does",
+    parameters: Type.Object({ /* ... */ }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      // Implementation
+    },
+  });
+
+  // Register commands
+  pi.registerCommand("example", {
+    description: "What this command does",
+    handler: async (args, ctx) => {
+      // Implementation
+    },
+  });
+
+  // Register lifecycle hooks
+  pi.on("session_start", async (event, ctx) => {
+    // Hook implementation
+  });
+}
+```
+
+See the [Pi SDK documentation](https://github.com/badlogic/pi-mono) for the full API reference.
+
+## What's Next
+
+- **[Bundled Extensions](/extensions/bundled-extensions)** — The 13 extensions that ship with GSD
+- **[Subagents](/extensions/subagents)** — Scout, Researcher, and Worker agents
+- **[Skills](/extensions/skills)** — Domain-specific instruction bundles
+- **[Custom Extensions](/extensions/custom-extensions)** — Building your own

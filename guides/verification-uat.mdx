@@ -1,0 +1,326 @@
+---
+title: Verification & UAT
+description: How to verify task completion and manage user acceptance testing in GSD
+---
+
+## Verification Ladder
+
+GSD uses a tiered verification approach to ensure task completion is mechanically verifiable. Always use the strongest tier you can reach:
+
+<Steps>
+  <Step title="Static Verification">
+    Check that files exist, exports are present, wiring is connected, and implementations are not stubs.
+    
+    ```bash
+    # Example: Check file exists and has substantive content
+    wc -l src/lib/auth.ts
+    grep -c "export" src/lib/auth.ts
+    ```
+  </Step>
+
+  <Step title="Command Verification">
+    Run tests, build the project, lint code, or execute blocked commands.
+    
+    ```bash
+    npm test
+    npm run build
+    npm run lint
+    ```
+  </Step>
+
+  <Step title="Behavioral Verification">
+    Test browser flows, API responses, and end-to-end functionality.
+    
+    ```bash
+    curl -X POST http://localhost:3000/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"email":"test@example.com","password":"test123"}'
+    ```
+  </Step>
+
+  <Step title="Human Verification">
+    Ask the user only when you genuinely cannot verify yourself.
+    
+    This is the last resort - use it only for subjective outcomes or when automated verification is impossible.
+  </Step>
+</Steps>
+
+<Warning>
+  "All steps done" is NOT verification. Always check the actual outcomes against the must-haves.
+</Warning>
+
+## Must-Haves: The Foundation of Verification
+
+Every task plan includes must-haves - mechanically checkable outcomes that make verification deterministic.
+
+### Three Types of Must-Haves
+
+<AccordionGroup>
+  <Accordion title="Truths">
+    Observable behaviors that must be true when the task is done.
+    
+    **Examples:**
+    - "User can sign up with email and password"
+    - "Login returns a JWT token"
+    - "Invalid credentials return 401 status"
+    - "Password reset email is sent within 5 seconds"
+  </Accordion>
+
+  <Accordion title="Artifacts">
+    Files that must exist with real implementation (not stubs).
+    
+    **Format:** `path/to/file.ts` - Description (min X lines, exports: list)
+    
+    **Examples:**
+    - `src/lib/auth.ts` - JWT helpers (min 30 lines, exports: generateToken, verifyToken)
+    - `src/app/api/auth/login/route.ts` - Login endpoint (exports: POST)
+  </Accordion>
+
+  <Accordion title="Key Links">
+    Critical wiring between artifacts that must be connected.
+    
+    **Examples:**
+    - `login/route.ts` → `auth.ts` via import of `generateToken`
+    - `middleware.ts` → `auth.ts` via import of `verifyToken`
+    - `email.ts` → Resend API via `resend.emails.send()`
+  </Accordion>
+</AccordionGroup>
+
+## Verification Report Format
+
+When verification finds gaps or when documenting successful verification, use this structured format:
+
+```markdown
+### Observable Truths
+| # | Truth | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | User can sign up | ✓ PASS | POST /api/auth/signup returns 201 |
+| 2 | Login returns JWT | ✗ FAIL | Returns 500 - missing env var |
+
+### Artifacts
+| File | Expected | Status | Evidence |
+|------|----------|--------|----------|
+| src/lib/auth.ts | JWT helpers, min 30 lines | ✓ SUBSTANTIVE | 87 lines, exports generateToken |
+| src/lib/email.ts | Email sending | ✗ STUB | 8 lines, console.log instead of sending |
+
+### Key Links
+| From | To | Via | Status |
+|------|----|----|--------|
+| login/route.ts | auth.ts | import generateToken | ✓ WIRED |
+| email.ts | Resend API | resend.emails.send() | ✗ NOT WIRED |
+
+### Anti-Patterns Found
+| File | Line | Pattern | Severity |
+|------|------|---------|----------|
+| src/lib/email.ts | 5 | console.log stub | 🛑 Blocker |
+```
+
+<Note>
+  When verification finds gaps, include a **Gaps** section detailing what's missing, the impact, and suggested fixes.
+</Note>
+
+## Boundary Map Verification
+
+The boundary map in `roadmap.md` specifies what each slice produces and consumes. During verification:
+
+1. **Check that produced exports exist** - The slice must export what the boundary map promises
+2. **Verify consumption matches** - Downstream slices must import what the boundary map says they consume
+3. **Update the boundary map if needed** - If implementation reveals better interfaces, update the map
+
+### Example Boundary Map Check
+
+```markdown
+## Boundary Map (from roadmap.md)
+
+### S01 → S02
+Produces:
+  types.ts → User, Session, AuthToken (interfaces)
+  auth.ts  → generateToken(), verifyToken(), refreshToken()
+
+Consumes: nothing (leaf node)
+```
+
+**Verification:**
+```bash
+# Check exports exist
+grep "export.*User" src/types.ts
+grep "export.*generateToken" src/auth.ts
+
+# Check downstream consumption (in S02)
+grep "import.*generateToken.*auth" src/api/auth/login/route.ts
+```
+
+## User Acceptance Testing (UAT)
+
+When a slice completes, GSD generates a `uat.md` file - a non-blocking human test script derived from the slice's must-haves and demo sentence.
+
+### UAT Characteristics
+
+<CardGroup cols={2}>
+  <Card title="Non-Blocking" icon="forward">
+    The agent does NOT wait for UAT results. It continues to the next slice immediately.
+  </Card>
+  
+  <Card title="Human-Friendly" icon="user">
+    Written in plain language with step-by-step instructions for manual testing.
+  </Card>
+  
+  <Card title="Derived from Must-Haves" icon="list-check">
+    Each test case maps directly to truths and artifacts from the slice plan.
+  </Card>
+  
+  <Card title="Demo-Oriented" icon="presentation">
+    Focuses on demonstrating the vertical capability the slice delivers.
+  </Card>
+</CardGroup>
+
+### UAT File Structure
+
+```markdown
+# S01: User Authentication - UAT
+
+**Demo:** Users can sign up, log in, and receive JWT tokens for authenticated requests.
+
+## Prerequisites
+- Development server running on http://localhost:3000
+- Database seeded with test data
+- Email service configured (or check console logs)
+
+## Test Cases
+
+### TC1: User Signup
+1. Navigate to /signup
+2. Enter email: test@example.com
+3. Enter password: SecurePass123!
+4. Click "Sign Up"
+5. **Expected:** Redirect to /dashboard with success message
+
+### TC2: User Login
+1. Navigate to /login
+2. Enter email: test@example.com
+3. Enter password: SecurePass123!
+4. Click "Log In"
+5. **Expected:** Redirect to /dashboard, JWT stored in cookies
+
+### TC3: Invalid Credentials
+1. Navigate to /login
+2. Enter email: test@example.com
+3. Enter password: WrongPassword
+4. Click "Log In"
+5. **Expected:** Error message "Invalid credentials", no redirect
+
+## Verification
+- [ ] All test cases pass
+- [ ] No console errors during testing
+- [ ] JWT token visible in browser DevTools > Application > Cookies
+```
+
+### Reporting UAT Failures
+
+When you test a UAT script and find failures:
+
+1. **Note the specific test case that failed**
+2. **Document the actual vs expected behavior**
+3. **Create a fix task** in the current slice or queue it for a new slice
+4. **Reference the UAT file** in the fix task plan
+
+<Steps>
+  <Step title="Document the Failure">
+    ```markdown
+    ## UAT Failure: S01 TC2
+    
+    **Test Case:** User Login
+    **Expected:** JWT stored in cookies
+    **Actual:** JWT returned in response body but not set as cookie
+    **Impact:** Subsequent authenticated requests fail
+    ```
+  </Step>
+
+  <Step title="Create Fix Task">
+    Add to the current slice's `plan.md` or create a new fix slice:
+    
+    ```markdown
+    - [ ] **T04: Fix JWT Cookie Setting**
+      Update login endpoint to set JWT as HTTP-only cookie instead of
+      returning in response body. References S01-UAT.md TC2 failure.
+    ```
+  </Step>
+
+  <Step title="Update State">
+    Record the failure in `.gsd/state.md` under **Blockers** or **Recent Decisions**:
+    
+    ```markdown
+    ## Blockers
+    - S01 UAT TC2 failed: JWT not set as cookie (fix queued as T04)
+    ```
+  </Step>
+</Steps>
+
+## Creating Fix Tasks from UAT Failures
+
+Fix tasks should be:
+
+- **Scoped to the specific failure** - Don't expand scope unnecessarily
+- **Include verification criteria** - Clear pass/fail conditions
+- **Reference the original UAT** - Link to the test case that failed
+- **Prioritized appropriately** - Blockers go first, nice-to-haves can wait
+
+### Fix Task Template
+
+```markdown
+# TXX: Fix [Specific Issue from UAT]
+
+**Slice:** SXX
+**Milestone:** MXXX
+**References:** SXX-UAT.md TCXX
+
+## Goal
+Resolve UAT failure where [brief description].
+
+## Must-Haves
+
+### Truths
+- Original UAT test case TCXX now passes
+- No regression in other test cases
+
+### Artifacts
+- [file.ts] - Updated with fix (modified lines: X-Y)
+
+### Key Links
+- [Verify existing wiring still works]
+
+## Steps
+1. Reproduce the UAT failure locally
+2. Implement the fix
+3. Re-run the full UAT script
+4. Verify no regressions
+
+## Context
+- Original implementation: [what was done]
+- Why it failed: [root cause]
+- Fix approach: [solution]
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Verify Early" icon="bolt">
+    Run verification checks as early as possible. Don't wait until all steps are complete.
+  </Card>
+  
+  <Card title="Automate When Possible" icon="robot">
+    Prefer command and behavioral verification over human verification.
+  </Card>
+  
+  <Card title="Document Evidence" icon="file-lines">
+    Always include concrete evidence in verification reports (command output, file contents, etc.).
+  </Card>
+  
+  <Card title="Keep UAT Current" icon="arrows-rotate">
+    Update UAT scripts when slice plans change. They should always reflect actual functionality.
+  </Card>
+</CardGroup>
+
+<Info>
+  UAT is non-blocking by design. The agent continues work while users test at their convenience. Report failures through fix tasks - the agent will address them in the next available slot.
+</Info>

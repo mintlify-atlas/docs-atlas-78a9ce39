@@ -1,0 +1,497 @@
+---
+title: Migrating from GSD v1
+description: Complete guide to migrating your .planning directories from the original Get Shit Done to GSD 2
+---
+
+## Overview
+
+The original Get Shit Done (v1) was a prompt framework that ran through Claude Code slash commands. It stored planning artifacts in `.planning/` directories using a specific file structure. GSD 2 is a standalone CLI that uses `.gsd/` directories with an evolved file format.
+
+The migration tool automatically converts your v1 projects to the v2 format, preserving all planning work, completion state, and research.
+
+<Note>
+  Migration works best when your v1 project has a `ROADMAP.md` file with milestone structure. Without it, milestones are inferred from the `phases/` directory.
+</Note>
+
+## What Changed Between v1 and v2
+
+<CardGroup cols={2}>
+  <Card title="Directory Name" icon="folder">
+    `.planning/` → `.gsd/`
+  </Card>
+  
+  <Card title="File Locations" icon="diagram-project">
+    Flat structure → Hierarchical `milestones/MXXX/slices/SXX/` structure
+  </Card>
+  
+  <Card title="Terminology" icon="tags">
+    Phases → Slices
+  </Card>
+  
+  <Card title="File Naming" icon="file">
+    `PROJECT.md`, `ROADMAP.md` → `state.md`, `MXXX-roadmap.md`
+  </Card>
+</CardGroup>
+
+### Conceptual Mapping
+
+| v1 Concept | v2 Concept | Notes |
+|------------|------------|-------|
+| `.planning/` directory | `.gsd/` directory | Root directory renamed |
+| Phase | Slice | Same concept, renamed for clarity |
+| `PROJECT.md` | `state.md` | Now a dashboard, not a project definition |
+| `ROADMAP.md` | `MXXX-roadmap.md` | One per milestone, milestone ID in filename |
+| `REQUIREMENTS.md` | Milestone vision in roadmap | Merged into roadmap header |
+| `phases/P1.0/` | `milestones/M001/slices/S01/` | Deep hierarchy for organization |
+| Phase plan | Slice `plan.md` | Now includes boundary map references |
+| Phase summary | Slice `summary.md` | Includes YAML frontmatter |
+| Research files | `research.md` at milestone/slice level | Consolidated into single files |
+| Decisions | `decisions.md` | Now append-only with structured format |
+
+## Running the Migration
+
+### Basic Usage
+
+<Steps>
+  <Step title="Install GSD 2">
+    ```bash
+    npm install -g gsd-pi
+    ```
+  </Step>
+
+  <Step title="Navigate to Your Project">
+    ```bash
+    cd ~/projects/my-old-gsd-project
+    ```
+  </Step>
+
+  <Step title="Run Migration">
+    ```bash
+    gsd
+    /gsd migrate
+    ```
+    
+    Or specify a path:
+    ```bash
+    /gsd migrate ~/projects/another-project
+    ```
+  </Step>
+
+  <Step title="Review Preview">
+    The migration tool shows a preview of all files it will create. Review carefully before proceeding.
+  </Step>
+
+  <Step title="Confirm">
+    Type `yes` to write the `.gsd/` directory, or `no` to cancel.
+  </Step>
+</Steps>
+
+<Warning>
+  The migration tool does NOT delete your `.planning/` directory. Both directories coexist after migration. You can safely delete `.planning/` once you've verified the migration.
+</Warning>
+
+### Migration with Agent Review
+
+For additional quality assurance, run an agent-driven review after migration:
+
+```bash
+/gsd migrate --review
+```
+
+This:
+1. Runs the standard migration
+2. Launches an agent session to review the output
+3. Checks for parsing errors, missing content, and structural issues
+4. Suggests corrections if needed
+
+<Info>
+  Agent review is recommended for complex projects with many phases or custom file structures.
+</Info>
+
+## What Gets Migrated
+
+The migration tool parses and converts:
+
+<AccordionGroup>
+  <Accordion title="Project Definition">
+    **v1 Source:** `PROJECT.md`
+    
+    **v2 Output:** Merged into first milestone's roadmap vision and `.gsd/state.md`
+    
+    The project title, description, and goals are extracted and placed in the appropriate v2 locations.
+  </Accordion>
+
+  <Accordion title="Roadmap Structure">
+    **v1 Source:** `ROADMAP.md`
+    
+    **v2 Output:** `milestones/MXXX/roadmap.md` (one per milestone)
+    
+    Milestones are detected from:
+    - Milestone sections in `ROADMAP.md` (if present)
+    - Numeric phase groups (e.g., P1.0-P1.3 → M001)
+    - Or inferred as a single milestone if no structure found
+    
+    Phases are mapped to slices with:
+    - Checkbox state preserved (`[x]` vs `[ ]`)
+    - Demo sentences extracted from phase descriptions
+    - Risk levels and dependencies inferred where possible
+  </Accordion>
+
+  <Accordion title="Requirements">
+    **v1 Source:** `REQUIREMENTS.md`
+    
+    **v2 Output:** Success criteria in milestone roadmap
+    
+    Bullet-format requirements are converted to success criteria and placed in the roadmap's header section.
+  </Accordion>
+
+  <Accordion title="Phase Plans">
+    **v1 Source:** `phases/PX.X/plan.md` or `phases/PX.X.md`
+    
+    **v2 Output:** `milestones/MXXX/slices/SXX/plan.md`
+    
+    Task decompositions are preserved with:
+    - Checkbox state maintained
+    - Must-haves extracted into structured format
+    - Individual task plans created as `TXX-plan.md` files
+  </Accordion>
+
+  <Accordion title="Phase Summaries">
+    **v1 Source:** `phases/PX.X/summary.md`
+    
+    **v2 Output:** `milestones/MXXX/slices/SXX/summary.md`
+    
+    Summaries are converted with:
+    - YAML frontmatter added (provides, requires, key_files, etc.)
+    - Narrative content preserved
+    - Drill-down paths updated to v2 structure
+  </Accordion>
+
+  <Accordion title="Research">
+    **v1 Source:** Multiple `*-research.md` files
+    
+    **v2 Output:** Consolidated `research.md` at milestone or slice level
+    
+    All research files are merged into single files at the appropriate level, with sections preserved.
+  </Accordion>
+
+  <Accordion title="Decisions">
+    **v1 Source:** Inline in plans or summaries
+    
+    **v2 Output:** `.gsd/decisions.md` (append-only register)
+    
+    Decisions are extracted and formatted as table rows with:
+    - Sequential IDs (D001, D002, ...)
+    - Scope tags (arch, library, api, etc.)
+    - Revisability conditions
+  </Accordion>
+</AccordionGroup>
+
+## Format Variations Supported
+
+The migration tool handles common v1 variations:
+
+### Roadmap Formats
+
+<Tabs>
+  <Tab title="Milestone Sections">
+    ```markdown
+    ## Milestone 1: Foundation
+    
+    <details>
+    <summary>Phases (3)</summary>
+    
+    - [x] **P1.0: Core Setup**
+    - [ ] **P1.1: Database Layer**
+    - [ ] **P1.2: API Foundation**
+    </details>
+    ```
+    
+    Detected as: M001 with 3 slices (S01, S02, S03)
+  </Tab>
+  
+  <Tab title="Flat Phase List">
+    ```markdown
+    # Roadmap
+    
+    - [x] P1.0: Core Setup
+    - [ ] P1.1: Database Layer
+    - [ ] P1.2: API Foundation
+    - [ ] P2.0: Authentication
+    ```
+    
+    Detected as: M001 with 4 slices (numeric grouping P1.x → M001)
+  </Tab>
+  
+  <Tab title="No Roadmap">
+    Phases inferred from `phases/` directory structure.
+    
+    ```
+    phases/
+      P1.0/
+      P1.1/
+      P2.0/
+    ```
+    
+    Detected as: M001 (P1.x) and M002 (P2.x)
+  </Tab>
+</Tabs>
+
+### Phase Formats
+
+- **Bold entries:** `- [x] **P1.0: Phase Title**`
+- **Plain entries:** `- [x] P1.0: Phase Title`
+- **Decimal numbering:** `P1.0`, `P1.1`, `P2.0`
+- **Duplicate numbers across milestones:** `P1.0` in M001 and `P1.0` in M002
+
+### Requirement Formats
+
+- **Bullet lists:** `- Requirement text`
+- **Numbered lists:** `1. Requirement text`
+- **Nested lists:** Indented sub-requirements
+
+## Post-Migration Steps
+
+<Steps>
+  <Step title="Verify the Migration">
+    Check that `.gsd/` directory structure looks correct:
+    
+    ```bash
+    tree .gsd/
+    ```
+    
+    Expected structure:
+    ```
+    .gsd/
+      state.md
+      decisions.md
+      milestones/
+        M001/
+          roadmap.md
+          context.md (if existed in v1)
+          research.md (if existed in v1)
+          slices/
+            S01/
+              plan.md
+              summary.md (if phase was complete)
+              tasks/
+                T01-plan.md
+    ```
+  </Step>
+
+  <Step title="Review State File">
+    Open `.gsd/state.md` and verify:
+    - Active milestone is correct
+    - Active slice matches where you left off
+    - Next action makes sense
+    
+    ```bash
+    cat .gsd/state.md
+    ```
+  </Step>
+
+  <Step title="Check Roadmap">
+    Review the generated roadmap(s):
+    
+    ```bash
+    cat .gsd/milestones/M001/roadmap.md
+    ```
+    
+    Verify:
+    - Milestone vision accurately represents your project
+    - Slices are in the right order
+    - Completion state (`[x]` vs `[ ]`) is preserved
+    - Demo sentences make sense
+  </Step>
+
+  <Step title="Run GSD Doctor">
+    Validate the `.gsd/` structure:
+    
+    ```bash
+    /gsd doctor
+    ```
+    
+    This checks for:
+    - Missing required files
+    - Malformed frontmatter
+    - Broken references
+    - Inconsistent state
+  </Step>
+
+  <Step title="Resume Work">
+    Start GSD in step mode to pick up where you left off:
+    
+    ```bash
+    gsd
+    /gsd
+    ```
+    
+    Or go autonomous:
+    ```bash
+    /gsd auto
+    ```
+  </Step>
+</Steps>
+
+## Handling Edge Cases
+
+### Missing ROADMAP.md
+
+If your v1 project has no `ROADMAP.md`, the migration tool:
+1. Scans the `phases/` directory
+2. Infers milestones from phase numbering (P1.x → M001, P2.x → M002)
+3. Creates a basic roadmap with phases as slices
+
+<Warning>
+  Without a roadmap, milestone vision and success criteria will be generic. You should edit the generated `roadmap.md` to add meaningful context.
+</Warning>
+
+### Custom Phase Numbering
+
+Non-standard phase numbers (e.g., `P-setup`, `P-core`, `P-deploy`) are handled as:
+- Single milestone (M001)
+- Phases mapped to slices in directory order (S01, S02, S03)
+
+### Incomplete Phases
+
+Phases without `plan.md` or `summary.md`:
+- Get placeholder plan files with TODO markers
+- Marked as incomplete in the roadmap
+- Flagged in the migration report for manual review
+
+### Decisions Embedded in Summaries
+
+The migration tool attempts to extract decisions from prose, but may miss some. After migration:
+
+1. Review generated `decisions.md`
+2. Manually add any missed decisions using the append-only format
+3. Run `/gsd doctor` to validate the decisions table
+
+## Manual Cleanup
+
+After migration, consider these manual improvements:
+
+<CardGroup cols={2}>
+  <Card title="Add Boundary Maps" icon="diagram-project">
+    v1 didn't have boundary maps. Add them to roadmaps to clarify slice interfaces:
+    
+    ```markdown
+    ## Boundary Map
+    
+    ### S01 → S02
+    Produces:
+      types.ts → User, Session
+      auth.ts → generateToken(), verifyToken()
+    
+    Consumes: nothing
+    ```
+  </Card>
+  
+  <Card title="Enrich Must-Haves" icon="list-check">
+    v1 task plans may have vague must-haves. Enhance them with:
+    - Specific file paths and line counts
+    - Export lists
+    - Key link wiring
+  </Card>
+  
+  <Card title="Update Context Files" icon="file-pen">
+    Review and update `context.md` files with:
+    - Project-specific constraints
+    - Reference file paths
+    - Implementation decisions from v1 that may not have migrated
+  </Card>
+  
+  <Card title="Refine Risk Levels" icon="triangle-exclamation">
+    Manually add risk tags to roadmap slices:
+    
+    ```markdown
+    - [ ] **S01: Core Setup** `risk:low` `depends:[]`
+    - [ ] **S02: Complex Integration** `risk:high` `depends:[S01]`
+    ```
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Migration Fails with Parse Error
+
+**Symptom:** Migration aborts with "Could not parse ROADMAP.md"
+
+**Solution:**
+1. Check that `ROADMAP.md` uses standard markdown
+2. Look for unclosed tags or malformed lists
+3. Try `--review` flag for agent-assisted parsing
+
+### Missing Phases After Migration
+
+**Symptom:** Some v1 phases didn't migrate to slices
+
+**Solution:**
+1. Check if phase directories have `plan.md` or any content
+2. Empty phase directories are skipped - add them manually if needed
+3. Review migration log (printed during migration) for skipped items
+
+### Completion State Wrong
+
+**Symptom:** Slices marked complete that shouldn't be (or vice versa)
+
+**Solution:**
+1. Edit the roadmap directly - change `[x]` to `[ ]` or vice versa
+2. Run `/gsd doctor` to update derived state
+3. Check `summary.md` files - presence indicates completion
+
+### Can't Find Old Decisions
+
+**Symptom:** Decisions from v1 summaries didn't migrate to `decisions.md`
+
+**Solution:**
+1. Manually read v1 summaries for key decisions
+2. Add them to `.gsd/decisions.md` in append-only format:
+   ```markdown
+   | D001 | M001/S01 | library | Validation | Zod | Already in deps | No |
+   ```
+
+## Migration Checklist
+
+<Steps>
+  <Step title="Pre-Migration">
+    - [ ] Backup your project (or commit all changes)
+    - [ ] Note current phase/task you're working on
+    - [ ] Review `.planning/` structure for custom files you want to preserve
+  </Step>
+
+  <Step title="Run Migration">
+    - [ ] Execute `/gsd migrate` (with `--review` if desired)
+    - [ ] Review preview carefully
+    - [ ] Confirm write operation
+  </Step>
+
+  <Step title="Post-Migration">
+    - [ ] Check `.gsd/` directory structure with `tree .gsd/`
+    - [ ] Verify `state.md` has correct active milestone/slice
+    - [ ] Review all roadmap files for accuracy
+    - [ ] Run `/gsd doctor` to validate structure
+    - [ ] Manually add boundary maps to roadmaps
+    - [ ] Enhance must-haves in task plans if needed
+  </Step>
+
+  <Step title="Resume Work">
+    - [ ] Run `/gsd` to see next action
+    - [ ] Test that GSD correctly identifies where to continue
+    - [ ] Consider running `/gsd auto` for autonomous progress
+    - [ ] Delete `.planning/` directory once satisfied
+  </Step>
+</Steps>
+
+## Getting Help
+
+If migration doesn't work as expected:
+
+1. **Check the docs:** Review [GSD Workflow](/concepts/milestones-slices-tasks) for v2 structure
+2. **Run doctor:** `/gsd doctor` often identifies and fixes issues
+3. **Report issues:** File an issue at [github.com/gsd-build/GSD-2/issues](https://github.com/gsd-build/GSD-2/issues)
+4. **Ask the community:** Join discussions on GitHub
+
+<Info>
+  The migration tool is conservative - it won't delete or modify your `.planning/` directory. You can always re-run migration with different options or manually adjust the output.
+</Info>

@@ -1,0 +1,545 @@
+---
+title: Preferences
+description: Configure models, timeouts, budgets, and skill discovery
+icon: sliders
+---
+
+GSD preferences control model selection, auto-mode supervision, budget ceilings, and skill routing. Configure globally or per-project.
+
+## Commands
+
+<ParamField path="/gsd prefs" type="command">
+  Open global preferences file (`~/.gsd/preferences.md`)
+</ParamField>
+
+<ParamField path="/gsd prefs global" type="command">
+  Explicit alias for global preferences (same as `/gsd prefs`)
+</ParamField>
+
+<ParamField path="/gsd prefs project" type="command">
+  Open project preferences file (`.gsd/preferences.md`)
+</ParamField>
+
+<ParamField path="/gsd prefs status" type="command">
+  Show current preferences (merged global + project)
+</ParamField>
+
+## Preference Scopes
+
+### Global Preferences
+
+**Path:** `~/.gsd/preferences.md`
+
+**Scope:** All GSD projects
+
+**Use for:**
+
+- Default model selection
+- Budget ceilings
+- Skill discovery mode
+- Personal API keys
+
+### Project Preferences
+
+**Path:** `.gsd/preferences.md` (in project root)
+
+**Scope:** Current project only
+
+**Use for:**
+
+- Project-specific model overrides
+- Custom timeout thresholds
+- Project-specific skills
+
+### Merging Behavior
+
+Project preferences **override** global preferences:
+
+```yaml
+# Global: ~/.gsd/preferences.md
+models:
+  execution: claude-sonnet-4-6
+
+# Project: .gsd/preferences.md
+models:
+  execution: claude-opus-4-6  ← Overrides global
+```
+
+**Result:** Execution uses Opus for this project, Sonnet for others.
+
+## Preference File Format
+
+Preferences are markdown files with **YAML frontmatter**:
+
+```yaml
+---
+version: 1
+models:
+  research: claude-sonnet-4-6
+  planning: claude-opus-4-6
+  execution: claude-sonnet-4-6
+  completion: claude-sonnet-4-6
+skill_discovery: suggest
+auto_supervisor:
+  soft_timeout_minutes: 20
+  idle_timeout_minutes: 10
+  hard_timeout_minutes: 30
+budget_ceiling: 50.00
+---
+
+# GSD Preferences
+
+This file configures model selection, timeouts, and skill routing.
+
+Edit the YAML frontmatter above to change settings.
+```
+
+**Only the frontmatter is parsed.** The markdown body is documentation.
+
+## Model Selection
+
+Assign different models to different phases:
+
+```yaml
+models:
+  research: openrouter/deepseek/deepseek-r1  # Fast, cheap
+  planning: claude-opus-4-6                  # High quality
+  execution: claude-sonnet-4-6               # Balanced
+  completion: claude-sonnet-4-6              # Balanced
+```
+
+**Phases:**
+
+- **research** — Milestone and slice research (scouting codebase, checking docs)
+- **planning** — Roadmap creation, slice planning, task decomposition
+- **execution** — Task execution (writing code, running tests)
+- **completion** — Summaries, UAT generation, reassessment
+
+**Model IDs:**
+
+Use any model supported by your LLM provider:
+
+```yaml
+models:
+  research: claude-sonnet-4-6
+  planning: claude-opus-4-6
+  execution: openrouter/anthropic/claude-sonnet-4-6
+  completion: openai/gpt-4o
+```
+
+See [LLM Providers](/guides/model-selection) for supported model formats.
+
+## Auto-Mode Supervision
+
+Configure timeout thresholds for auto mode:
+
+```yaml
+auto_supervisor:
+  soft_timeout_minutes: 20   # Warn LLM to wrap up
+  idle_timeout_minutes: 10   # Detect stalls (no tool calls)
+  hard_timeout_minutes: 30   # Pause auto mode
+```
+
+### Timeout Behavior
+
+#### Soft Timeout
+
+**Default:** 20 minutes
+
+**Trigger:** Unit runs for 20 minutes without completing.
+
+**Action:** GSD sends a warning to the LLM: "You've been working for 20 minutes. Please wrap up."
+
+**Effect:** LLM tries to finish current work and write durable output (summaries, commits).
+
+#### Idle Timeout
+
+**Default:** 10 minutes
+
+**Trigger:** LLM hasn't made a tool call in 10 minutes.
+
+**Action:** GSD nudges the LLM to make progress or finish.
+
+**Effect:** Detects stalls where the LLM is stuck in thought or waiting for input.
+
+#### Hard Timeout
+
+**Default:** 30 minutes
+
+**Trigger:** Unit runs for 30 minutes without completing.
+
+**Action:** GSD pauses auto mode and shows a diagnostic.
+
+**Effect:** Prevents infinite loops. User can inspect, fix, and resume.
+
+### Tuning Timeouts
+
+**For fast tasks (simple config changes):**
+
+```yaml
+auto_supervisor:
+  soft_timeout_minutes: 5
+  idle_timeout_minutes: 3
+  hard_timeout_minutes: 10
+```
+
+**For complex tasks (architectural refactors):**
+
+```yaml
+auto_supervisor:
+  soft_timeout_minutes: 40
+  idle_timeout_minutes: 20
+  hard_timeout_minutes: 60
+```
+
+## Budget Ceiling
+
+Pause auto mode when cost reaches a threshold:
+
+```yaml
+budget_ceiling: 50.00  # USD
+```
+
+**Behavior:**
+
+When total session cost reaches $50.00:
+
+```
+⚠️  Budget ceiling reached ($50.00)
+
+Auto mode paused. Current cost: $50.12
+
+To continue, increase the ceiling in preferences:
+  /gsd prefs
+
+Or resume without a ceiling:
+  /gsd auto
+```
+
+**No ceiling:**
+
+```yaml
+budget_ceiling: null  # or omit the field
+```
+
+## Skill Discovery
+
+Control how GSD discovers and applies skills:
+
+```yaml
+skill_discovery: suggest  # auto | suggest | off
+```
+
+### Modes
+
+#### `auto`
+
+**Behavior:** GSD automatically installs and loads relevant skills during research.
+
+**Use when:** You trust GSD to find and apply skills without confirmation.
+
+#### `suggest` (default)
+
+**Behavior:** GSD suggests skills but asks for confirmation before loading.
+
+**Use when:** You want visibility into which skills are being used.
+
+#### `off`
+
+**Behavior:** GSD never auto-discovers skills. Only loads skills from `always_use_skills`.
+
+**Use when:** You want full control over skill usage.
+
+## Always-Use Skills
+
+Force certain skills to always load:
+
+```yaml
+always_use_skills:
+  - mintlify
+  - aws
+```
+
+**Effect:** These skills are loaded for every task, regardless of skill discovery mode.
+
+**Use for:**
+
+- Project-specific skills (e.g., `mintlify` for docs projects)
+- Company-internal skills (e.g., `acme-api`)
+
+## Skill Rules
+
+Conditional skill routing based on context:
+
+```yaml
+skill_rules:
+  - when: "working on API endpoints"
+    use:
+      - rest-api
+      - openapi
+  - when: "writing tests"
+    prefer:
+      - jest
+      - vitest
+  - when: "refactoring"
+    avoid:
+      - experimental
+```
+
+**Fields:**
+
+- **when** — Natural language condition (interpreted by LLM)
+- **use** — Skills to always load when condition matches
+- **prefer** — Skills to prioritize (but not required)
+- **avoid** — Skills to never load when condition matches
+
+## Custom Instructions
+
+Project-specific instructions for the LLM:
+
+```yaml
+custom_instructions:
+  - "Always use TypeScript strict mode"
+  - "Follow ESLint rules in .eslintrc.json"
+  - "Write tests for all new functions"
+```
+
+**Effect:** Appended to every dispatch prompt.
+
+**Use for:**
+
+- Code style preferences
+- Project conventions (naming, file structure)
+- Testing requirements
+
+## UAT Dispatch
+
+Enable automatic UAT (user acceptance test) runs after slice completion:
+
+```yaml
+uat_dispatch: true  # false (default) | true
+```
+
+**Behavior:**
+
+When `true`, after completing a slice:
+
+1. GSD generates the UAT file (`.gsd/.../S0X-UAT.md`)
+2. Automatically dispatches a new agent session to run the UAT
+3. Agent follows the UAT steps and verifies outcomes
+4. Reports pass/fail
+
+**Use when:** You want automated verification after each slice.
+
+## Remote Questions
+
+Configure Slack or Discord for remote questions during auto mode:
+
+```yaml
+remote_questions:
+  channel: slack              # slack | discord
+  channel_id: C0123ABCDEF     # Slack channel ID or Discord channel ID
+  timeout_minutes: 15         # Wait up to 15 min for response
+  poll_interval_seconds: 5    # Check for replies every 5 sec
+```
+
+**Behavior:**
+
+When the LLM needs user input during auto mode:
+
+1. Posts question to Slack/Discord
+2. Polls for a reply every 5 seconds
+3. If no reply after 15 minutes, pauses auto mode
+
+**Setup:**
+
+See [Remote Questions](/extensions/bundled-extensions) for Slack/Discord bot setup.
+
+## Git Preferences
+
+Customize git commit behavior:
+
+```yaml
+git:
+  commit_message_prefix: "[GSD]"
+  branch_prefix: "gsd"
+  squash_merge: true
+```
+
+**Fields:**
+
+- **commit_message_prefix** — Prefix for all GSD commits (default: none)
+- **branch_prefix** — Prefix for slice branches (default: `gsd`)
+- **squash_merge** — Use squash merge for slices (default: `true`)
+
+## Example Preferences
+
+### Cost-Optimized
+
+Use cheap models for most work, Opus only for planning:
+
+```yaml
+---
+version: 1
+models:
+  research: openrouter/deepseek/deepseek-r1
+  planning: claude-opus-4-6
+  execution: claude-sonnet-4-6
+  completion: claude-sonnet-4-6
+budget_ceiling: 25.00
+skill_discovery: off
+---
+```
+
+### Quality-First
+
+Use Opus for everything, no budget limit:
+
+```yaml
+---
+version: 1
+models:
+  research: claude-opus-4-6
+  planning: claude-opus-4-6
+  execution: claude-opus-4-6
+  completion: claude-opus-4-6
+budget_ceiling: null
+---
+```
+
+### Fast Iteration
+
+Short timeouts, auto skill discovery:
+
+```yaml
+---
+version: 1
+models:
+  research: claude-sonnet-4-6
+  planning: claude-sonnet-4-6
+  execution: claude-sonnet-4-6
+  completion: claude-sonnet-4-6
+auto_supervisor:
+  soft_timeout_minutes: 10
+  idle_timeout_minutes: 5
+  hard_timeout_minutes: 15
+skill_discovery: auto
+---
+```
+
+### Documentation Projects
+
+Always load Mintlify skill, enforce style:
+
+```yaml
+---
+version: 1
+always_use_skills:
+  - mintlify
+custom_instructions:
+  - "Use Mintlify components (Card, CardGroup, ParamField)"
+  - "Keep pages under 500 lines"
+  - "Include code examples for all features"
+---
+```
+
+## Preference Status
+
+Check current effective preferences:
+
+```bash
+/gsd prefs status
+```
+
+**Output:**
+
+```
+GSD skill prefs — global present: ~/.gsd/preferences.md; project missing: .gsd/preferences.md
+
+Skills: 2 resolved, 0 unresolved
+
+Effective settings:
+  research: claude-sonnet-4-6
+  planning: claude-opus-4-6
+  execution: claude-sonnet-4-6
+  completion: claude-sonnet-4-6
+  budget_ceiling: $50.00
+  skill_discovery: suggest
+  soft_timeout: 20 min
+  idle_timeout: 10 min
+  hard_timeout: 30 min
+```
+
+## Creating Preferences
+
+First time running `/gsd prefs`:
+
+```bash
+/gsd prefs
+```
+
+**Output:**
+
+```
+Created global GSD skill preferences at ~/.gsd/preferences.md
+
+Edit ~/.gsd/preferences.md to update global GSD skill preferences.
+```
+
+GSD creates the file from a template with default values.
+
+## Validation
+
+Invalid preferences are caught by `/gsd doctor`:
+
+```bash
+/gsd doctor
+```
+
+**Output:**
+
+```
+🔴 Preferences: skill_rules must be a list
+  Found: skill_rules: "always use docs"
+  Expected: skill_rules: ["always use docs"]
+```
+
+Fix the YAML syntax and re-run.
+
+## Legacy Path
+
+GSD v1 stored preferences at `~/.pi/agent/gsd-preferences.md`. GSD-2 checks this path as a fallback:
+
+**Precedence:**
+
+1. `~/.gsd/preferences.md` (canonical)
+2. `~/.pi/agent/gsd-preferences.md` (legacy)
+
+If both exist, canonical takes precedence.
+
+**Migration:**
+
+```bash
+mv ~/.pi/agent/gsd-preferences.md ~/.gsd/preferences.md
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Auto mode respects model selection and timeouts
+  </Card>
+  <Card title="Status" icon="gauge" href="/commands/status-queue">
+    Check budget usage against ceiling
+  </Card>
+  <Card title="Doctor" icon="stethoscope" href="/commands/doctor">
+    Validates preference file syntax
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Set up global preferences: `/gsd prefs`
+2. Configure model selection per phase
+3. Set a budget ceiling to avoid overspending
+4. Tune timeouts based on your project complexity

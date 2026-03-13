@@ -1,0 +1,392 @@
+---
+title: Recovery & Troubleshooting
+description: Crash recovery flow, stuck detection, reconciliation when files disagree, using /gsd doctor
+---
+
+## Overview
+
+GSD is designed to recover from crashes, detect stuck loops, and reconcile inconsistent state. This guide covers what to do when things go wrong.
+
+## Crash Recovery
+
+If the session crashes mid-task, GSD's recovery system kicks in automatically.
+
+### How Crash Recovery Works
+
+<Steps>
+  <Step title="Lock files track current work">
+    `.gsd/locks/` contains a lock file with the current unit of work (milestone, slice, task).
+  </Step>
+  
+  <Step title="Session files survive">
+    `~/.gsd/sessions/` contains the most recent session file with all tool calls that made it to disk.
+  </Step>
+  
+  <Step title="Recovery briefing is synthesized">
+    When you run `/gsd auto` after a crash, GSD:
+    - Reads the lock file to see what was in progress
+    - Reads the session file to see what tool calls succeeded
+    - Synthesizes a recovery briefing with full context
+  </Step>
+  
+  <Step title="Resume with full context">
+    The agent picks up exactly where it left off, with all context from the crashed session.
+  </Step>
+</Steps>
+
+### Example: Crash During Task Execution
+
+1. Auto mode is executing `T03: File writer with round-trip fidelity`
+2. Session crashes after the agent wrote `file-writer.ts` but before verification
+3. You run `/gsd auto` again
+4. GSD reads the lock file: `M001/S01/T03`
+5. GSD reads the session file: sees `file-writer.ts` was created
+6. GSD resumes: "I see file-writer.ts was created. Now verifying must-haves..."
+
+### What You Need to Do
+
+Nothing. Just run:
+
+```bash
+gsd
+/gsd auto
+```
+
+Recovery happens automatically.
+
+## Stuck Detection
+
+If the agent can't produce the expected artifact (e.g., task plan, summary), GSD detects the stuck loop and retries with diagnostics.
+
+### How Stuck Detection Works
+
+<Steps>
+  <Step title="Same unit dispatches twice">
+    If the same task (e.g., T03) is dispatched twice in a row, GSD knows the agent didn't produce the expected output.
+  </Step>
+  
+  <Step title="Retry once with diagnostics">
+    GSD retries the task with a deep diagnostic message:
+    
+    > "Previous attempt failed to produce T03-summary.md. Check verification report for gaps."
+  </Step>
+  
+  <Step title="Fail after second attempt">
+    If the second attempt also fails, auto mode stops with the exact file it expected:
+    
+    > "Task T03 failed twice. Expected: .gsd/milestones/M001/slices/S01/tasks/T03-summary.md"
+  </Step>
+</Steps>
+
+### What to Do When Stuck
+
+<Steps>
+  <Step title="Read the diagnostic message">
+    GSD tells you what file is missing. Example:
+    
+    > "Expected: .gsd/milestones/M001/slices/S01/tasks/T03-summary.md"
+  </Step>
+  
+  <Step title="Check the task plan">
+    ```bash
+    cat .gsd/milestones/M001/slices/S01/tasks/T03-plan.md
+    ```
+    
+    Does the task have clear must-haves? If not, the agent doesn't know when it's done.
+  </Step>
+  
+  <Step title="Run step mode to investigate">
+    ```bash
+    gsd
+    /gsd
+    ```
+    
+    Step through the task manually. See where the agent gets stuck.
+  </Step>
+  
+  <Step title="Fix the issue manually or refine the plan">
+    - If the agent is missing context, add it to `context.md`
+    - If the task is too large, split it into two tasks
+    - If verification is impossible, adjust must-haves
+  </Step>
+  
+  <Step title="Resume auto mode">
+    ```bash
+    /gsd auto
+    ```
+  </Step>
+</Steps>
+
+## File Reconciliation
+
+If `.gsd/` files disagree (e.g., roadmap says slice done but no summary exists), GSD pauses and surfaces the issue.
+
+### Common Inconsistencies
+
+<CardGroup cols={2}>
+  <Card title="Roadmap says done, summary missing" icon="triangle-exclamation">
+    Roadmap has `[x]` for a slice, but `summary.md` doesn't exist.
+    
+    **Fix:** Treat the slice as incomplete. Remove the `[x]` checkbox.
+  </Card>
+  
+  <Card title="Task marked done, no summary" icon="triangle-exclamation">
+    `plan.md` has `[x]` for a task, but `T01-summary.md` doesn't exist.
+    
+    **Fix:** Treat the task as incomplete. Remove the `[x]` checkbox.
+  </Card>
+  
+  <Card title="Continue file for completed task" icon="triangle-exclamation">
+    `continue.md` exists but the task is marked `[x]` in `plan.md`.
+    
+    **Fix:** Delete `continue.md` (the task is done).
+  </Card>
+  
+  <Card title="State points to nonexistent slice" icon="triangle-exclamation">
+    `STATE.md` says `Active Slice: S05`, but `S05/` doesn't exist in the milestone.
+    
+    **Fix:** Rebuild `STATE.md` from roadmap and plan files.
+  </Card>
+</CardGroup>
+
+### Using /gsd doctor
+
+`/gsd doctor` validates `.gsd/` integrity and finds inconsistencies.
+
+<Steps>
+  <Step title="Run the doctor">
+    ```bash
+    gsd
+    /gsd doctor
+    ```
+  </Step>
+  
+  <Step title="Review diagnostics">
+    The doctor checks:
+    - Roadmap checkboxes vs summaries
+    - Plan checkboxes vs task summaries
+    - Continue files vs task completion
+    - State file vs actual files
+    - Git branch existence vs active slice
+  </Step>
+  
+  <Step title="Follow repair instructions">
+    The doctor suggests fixes. Example:
+    
+    > "Roadmap says S01 is done but .gsd/milestones/M001/slices/S01/summary.md is missing. Run: `rm -f .gsd/milestones/M001/roadmap.md` and re-plan."
+  </Step>
+</Steps>
+
+## Timeout Supervision
+
+Auto mode has three timeout thresholds to prevent runaway sessions.
+
+### Timeout Types
+
+<CardGroup cols={3}>
+  <Card title="Soft Timeout" icon="bell">
+    Default: 20 minutes
+    
+    **What happens:** Agent receives a warning to wrap up work.
+    
+    **Recovery:** Agent writes `continue.md` and pauses cleanly.
+  </Card>
+  
+  <Card title="Idle Timeout" icon="hourglass">
+    Default: 10 minutes
+    
+    **What happens:** No tool calls in 10 minutes — agent is stuck.
+    
+    **Recovery:** Auto mode nudges the agent: "You've been idle. Finish durable output or write continue.md."
+  </Card>
+  
+  <Card title="Hard Timeout" icon="stop">
+    Default: 30 minutes
+    
+    **What happens:** Task has run too long.
+    
+    **Recovery:** Auto mode pauses immediately. Session is saved for forensics.
+  </Card>
+</CardGroup>
+
+### Adjusting Timeouts
+
+<Steps>
+  <Step title="Edit preferences">
+    ```bash
+    /gsd prefs
+    ```
+  </Step>
+  
+  <Step title="Change timeout values">
+    ```yaml
+    auto_supervisor:
+      soft_timeout_minutes: 30
+      idle_timeout_minutes: 15
+      hard_timeout_minutes: 45
+    ```
+  </Step>
+  
+  <Step title="Save and resume">
+    Changes apply at the next task execution.
+  </Step>
+</Steps>
+
+## Common Issues
+
+### Auto Mode Paused Mid-Milestone
+
+<AccordionGroup>
+  <Accordion title="Budget ceiling reached">
+    Check `/gsd status` for cost breakdown. Adjust `budget_ceiling` in preferences if needed, then resume:
+    
+    ```bash
+    /gsd auto
+    ```
+  </Accordion>
+  
+  <Accordion title="Hard timeout hit">
+    A task ran too long. Check the task plan — it may be too large. Split into two tasks, then resume:
+    
+    ```bash
+    /gsd auto
+    ```
+  </Accordion>
+  
+  <Accordion title="Stuck detection triggered">
+    The same task failed twice. Check diagnostics, fix the issue, then resume.
+  </Accordion>
+</AccordionGroup>
+
+### Files Out of Sync
+
+<AccordionGroup>
+  <Accordion title="Roadmap and summaries disagree">
+    Run `/gsd doctor` to find inconsistencies. Follow repair instructions.
+  </Accordion>
+  
+  <Accordion title="Continue file exists but task is done">
+    Delete the continue file:
+    
+    ```bash
+    rm .gsd/milestones/M001/slices/S01/continue.md
+    ```
+  </Accordion>
+  
+  <Accordion title="State file points to wrong slice">
+    Rebuild state from roadmap:
+    
+    ```bash
+    gsd
+    /gsd doctor
+    ```
+    
+    The doctor will fix `STATE.md`.
+  </Accordion>
+</AccordionGroup>
+
+### Git Issues
+
+<AccordionGroup>
+  <Accordion title="Branch gsd/M001/S01 doesn't exist">
+    Auto mode creates branches automatically. If a branch is missing:
+    
+    1. Check if the slice is actually in progress: `cat .gsd/STATE.md`
+    2. If it should exist, run `/gsd doctor`
+  </Accordion>
+  
+  <Accordion title="Merge conflict on main">
+    GSD handles merges automatically. If you see a conflict:
+    
+    1. Don't manually resolve it
+    2. Run `/gsd doctor` to check state
+    3. Report the issue: the agent will reconcile
+  </Accordion>
+  
+  <Accordion title="Slice branch not deleted after merge">
+    Auto mode deletes slice branches after squash merge. If a branch remains:
+    
+    ```bash
+    git branch -d gsd/M001/S01
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Performance Issues
+
+<AccordionGroup>
+  <Accordion title="Auto mode is slow">
+    Check:
+    
+    1. Model selection — is Opus used for execution? Switch to Sonnet:
+       ```bash
+       /gsd prefs
+       ```
+    2. Context size — are summaries too large? Check `.gsd/milestones/M001/summary.md`
+    3. Network latency — if using OpenRouter, try a direct provider
+  </Accordion>
+  
+  <Accordion title="Tasks taking too long">
+    Tasks should fit in one context window (typically 15-30 minutes). If tasks run longer:
+    
+    1. Check the task plan — is it too large?
+    2. Split large tasks into smaller ones
+    3. Adjust `hard_timeout_minutes` in preferences
+  </Accordion>
+</AccordionGroup>
+
+## Recovery Checklist
+
+When something goes wrong:
+
+<Steps>
+  <Step title="Don't panic">
+    GSD is designed to recover. Most issues are recoverable.
+  </Step>
+  
+  <Step title="Run /gsd doctor">
+    ```bash
+    gsd
+    /gsd doctor
+    ```
+    
+    This finds inconsistencies and suggests fixes.
+  </Step>
+  
+  <Step title="Check STATE.md">
+    ```bash
+    cat .gsd/STATE.md
+    ```
+    
+    Understand where the agent thinks it is.
+  </Step>
+  
+  <Step title="Check for continue.md">
+    ```bash
+    ls .gsd/milestones/M001/slices/S01/continue.md
+    ```
+    
+    If it exists, the agent has a resume point.
+  </Step>
+  
+  <Step title="Resume auto mode or step mode">
+    ```bash
+    /gsd auto  # or /gsd for step mode
+    ```
+  </Step>
+</Steps>
+
+## Best Practices
+
+- **Run /gsd doctor regularly** — catch issues before they cascade
+- **Don't edit .gsd/ files directly** — use GSD commands
+- **Use step mode to investigate** — when auto mode fails, step through manually
+- **Adjust timeouts for your project** — complex tasks may need longer timeouts
+- **Keep tasks small** — one context window per task
+- **Let auto mode finish slices** — interrupting mid-slice leaves incomplete state
+
+## Related
+
+- [Long-Running Work](/guides/long-running-work) — Continue protocol and handling interruptions
+- [Multi-Terminal Workflow](/guides/multi-terminal-workflow) — Safe concurrent operations
+- [Verification & UAT](/guides/verification-uat) — When verification fails

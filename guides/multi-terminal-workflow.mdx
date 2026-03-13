@@ -1,0 +1,305 @@
+---
+title: Multi-Terminal Workflow
+description: The two-terminal pattern for running auto mode in one terminal while steering from another
+---
+
+## Overview
+
+The recommended GSD workflow: run `/gsd auto` in one terminal, steer from another. Both terminals read and write the same `.gsd/` files on disk. Your decisions are picked up automatically at the next phase boundary.
+
+## The Two-Terminal Pattern
+
+<Steps>
+  <Step title="Terminal 1: Let it build">
+    ```bash
+    gsd
+    /gsd auto
+    ```
+    
+    This terminal executes work autonomously. It:
+    - Researches the codebase
+    - Plans slices into tasks
+    - Executes each task in a fresh context window
+    - Verifies outcomes
+    - Commits work
+    - Advances to the next slice
+    
+    **Don't interrupt this terminal** unless you need to pause.
+  </Step>
+  
+  <Step title="Terminal 2: Steer while it works">
+    ```bash
+    gsd
+    ```
+    
+    In this terminal, you can:
+    - Discuss architecture decisions (`/gsd discuss`)
+    - Check progress (`/gsd status`)
+    - Queue future milestones (`/gsd queue`)
+    - Adjust preferences (`/gsd prefs`)
+    - Validate `.gsd/` integrity (`/gsd doctor`)
+    
+    Your changes are picked up at the next phase boundary in Terminal 1.
+  </Step>
+</Steps>
+
+## Why Two Terminals?
+
+<CardGroup cols={2}>
+  <Card title="Uninterrupted execution" icon="play">
+    Auto mode runs continuously without manual intervention. No context switches, no babysitting.
+  </Card>
+  
+  <Card title="Real-time steering" icon="sliders">
+    Make architectural decisions, queue work, adjust preferences — all while auto mode runs.
+  </Card>
+  
+  <Card title="Safe concurrency" icon="shield">
+    Both terminals read/write `.gsd/` files. State is synchronized automatically.
+  </Card>
+  
+  <Card title="Visibility" icon="eye">
+    Monitor progress without interrupting execution. Check cost, status, git history.
+  </Card>
+</CardGroup>
+
+## Safe Concurrent Operations
+
+Both terminals can safely perform certain operations while auto mode runs.
+
+### Always Safe
+
+<CardGroup cols={2}>
+  <Card title="/gsd status" icon="chart-line">
+    Check progress, cost, and current position. Read-only operation.
+  </Card>
+  
+  <Card title="/gsd discuss" icon="comments">
+    Discuss architecture decisions. Writes to `context.md`, which auto mode reads at the next phase boundary.
+  </Card>
+  
+  <Card title="/gsd queue" icon="list">
+    Queue future milestones. Auto mode picks them up after the current milestone completes.
+  </Card>
+  
+  <Card title="/gsd prefs" icon="gear">
+    Adjust model selection, timeouts, budget ceiling. Changes apply at the next phase boundary.
+  </Card>
+  
+  <Card title="/gsd doctor" icon="stethoscope">
+    Validate `.gsd/` integrity. Read-only diagnostics.
+  </Card>
+  
+  <Card title="Git commands" icon="code-branch">
+    Read git history, inspect branches. Don't modify branches that auto mode is using (`gsd/M001/SXX`).
+  </Card>
+</CardGroup>
+
+### Not Safe
+
+<CardGroup cols={2}>
+  <Card title="Editing .gsd/ files directly" icon="file-pen">
+    Auto mode reads these files between phases. Direct edits may cause inconsistencies. Use GSD commands instead.
+  </Card>
+  
+  <Card title="Running /gsd auto in both terminals" icon="ban">
+    Only one auto mode instance per project. Lock files prevent this, but don't try.
+  </Card>
+  
+  <Card title="Git operations on active branches" icon="code-branch">
+    Don't commit, rebase, or delete `gsd/M001/SXX` branches while auto mode is using them.
+  </Card>
+  
+  <Card title="Manual task execution" icon="terminal">
+    Don't run `/gsd` in step mode while auto mode is active. You'll conflict with disk state.
+  </Card>
+</CardGroup>
+
+## Common Workflows
+
+### Architectural Decision During Auto Mode
+
+Auto mode is executing, but you realize a decision needs to be made.
+
+<Steps>
+  <Step title="In Terminal 2, open a discussion">
+    ```bash
+    /gsd discuss
+    ```
+    
+    Talk through the decision with the agent. This writes to `context.md`.
+  </Step>
+  
+  <Step title="Auto mode picks it up">
+    At the next phase boundary (e.g., when planning the next slice), auto mode reads `context.md` and respects your decision.
+  </Step>
+</Steps>
+
+### Queuing the Next Milestone
+
+Auto mode is working on M001, but you want to plan M002.
+
+<Steps>
+  <Step title="In Terminal 2, queue the next milestone">
+    ```bash
+    /gsd queue
+    ```
+    
+    Describe M002's vision and success criteria.
+  </Step>
+  
+  <Step title="Auto mode transitions automatically">
+    When M001 completes, auto mode reads the queued milestone and starts M002.
+  </Step>
+</Steps>
+
+### Monitoring Progress
+
+You want to see how far auto mode has progressed.
+
+<Steps>
+  <Step title="In Terminal 2, check status">
+    ```bash
+    /gsd status
+    ```
+    
+    Or press `Ctrl+Alt+G` for the real-time overlay.
+  </Step>
+  
+  <Step title="Inspect git history">
+    ```bash
+    git log --oneline
+    ```
+    
+    Each slice is one clean commit on `main`.
+  </Step>
+  
+  <Step title="Read state file">
+    ```bash
+    cat .gsd/STATE.md
+    ```
+    
+    See current position, recent decisions, next action.
+  </Step>
+</Steps>
+
+### Adjusting Model Selection Mid-Milestone
+
+Auto mode is using Opus for execution, but you want to switch to Sonnet to save cost.
+
+<Steps>
+  <Step title="In Terminal 2, edit preferences">
+    ```bash
+    /gsd prefs
+    ```
+    
+    Change `execution` model to `claude-sonnet-4-6`.
+  </Step>
+  
+  <Step title="Auto mode picks it up">
+    At the next task execution, auto mode uses Sonnet instead of Opus.
+  </Step>
+</Steps>
+
+## Checking What Auto Mode is Doing
+
+### Real-Time Dashboard
+
+Press `Ctrl+Alt+G` in Terminal 2 (or Terminal 1) to see:
+
+- Current milestone, slice, task
+- Phase (Research, Plan, Execute, Complete)
+- Elapsed time
+- Cost breakdown
+- Progress (completed/in-progress units)
+
+### State File
+
+```bash
+cat .gsd/STATE.md
+```
+
+Shows:
+- Active milestone, slice, task
+- Recent decisions
+- Blockers
+- Next action
+
+### Git History
+
+```bash
+git log --oneline
+```
+
+Each slice is one commit on `main`. Slices are squash-merged from `gsd/M001/SXX` branches.
+
+### Cost Tracking
+
+```bash
+/gsd status
+```
+
+See per-task, per-slice, and per-milestone cost breakdowns.
+
+## Pausing Auto Mode from Terminal 2
+
+You can't directly stop auto mode from Terminal 2, but you can signal it to pause.
+
+<Steps>
+  <Step title="Create a stop signal (manual)">
+    ```bash
+    touch .gsd/STOP
+    ```
+    
+    Auto mode checks for this file at phase boundaries. If it exists, auto mode pauses.
+  </Step>
+  
+  <Step title="Or use Escape in Terminal 1">
+    Switch to Terminal 1 and press **Escape** or run `/gsd stop` to pause gracefully.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Changes in Terminal 2 not picked up">
+    Changes (e.g., preferences, context) are picked up at **phase boundaries**, not immediately. Wait for the current task to complete.
+  </Accordion>
+  
+  <Accordion title="Lock file prevents starting Terminal 2">
+    If you see "Another GSD session is running", it's because Terminal 1 holds a lock. This is expected — Terminal 2 should start in interactive mode (`gsd` without `/gsd auto`).
+  </Accordion>
+  
+  <Accordion title="Git conflict between terminals">
+    Don't modify `gsd/M001/SXX` branches manually while auto mode is using them. Auto mode owns these branches.
+  </Accordion>
+  
+  <Accordion title="State file out of sync">
+    Run `/gsd doctor` in Terminal 2 to validate `.gsd/` integrity. If files disagree, the doctor will surface the issue.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+- **Use Terminal 1 for auto mode only** — let it run uninterrupted
+- **Use Terminal 2 for steering** — discuss, queue, monitor
+- **Don't edit .gsd/ files directly** — use GSD commands
+- **Wait for phase boundaries** — changes aren't instant, they're picked up at the next phase
+- **Check /gsd status frequently** — stay aware of progress and cost
+- **Press Escape to pause gracefully** — don't kill Terminal 1 with Ctrl+C
+
+## Advanced: Three-Terminal Pattern
+
+For large projects, you might want:
+
+- **Terminal 1:** Auto mode
+- **Terminal 2:** Steering (discuss, queue, prefs)
+- **Terminal 3:** Monitoring (watch logs, git history, file changes)
+
+All three terminals read the same `.gsd/` files. This is safe as long as Terminal 1 is the only one running `/gsd auto`.
+
+## Related
+
+- [Long-Running Work](/guides/long-running-work) — Running auto mode overnight
+- [Cost Tracking](/guides/cost-tracking) — Monitoring cost in real-time
+- [Recovery & Troubleshooting](/guides/recovery-troubleshooting) — What to do when things go wrong

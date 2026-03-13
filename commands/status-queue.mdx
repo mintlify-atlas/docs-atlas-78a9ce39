@@ -1,0 +1,426 @@
+---
+title: Status & Queue
+description: Progress dashboard and milestone planning
+icon: gauge
+---
+
+GSD provides real-time observability into your project's progress and cost. `/gsd status` shows the dashboard, `/gsd queue` plans future milestones.
+
+## Commands
+
+<ParamField path="/gsd status" type="command">
+  Show the progress dashboard overlay
+</ParamField>
+
+<ParamField path="Ctrl+Alt+G" type="shortcut">
+  Toggle dashboard overlay (same as `/gsd status`)
+</ParamField>
+
+<ParamField path="/gsd queue" type="command">
+  Queue future milestones for multi-milestone planning
+</ParamField>
+
+## Status Dashboard
+
+The dashboard shows:
+
+- Current milestone, slice, and task
+- Progress bars (slice and milestone completion)
+- Active phase (research, plan, execute, complete)
+- Cost and token usage (session and project totals)
+- Completed units with timing and cost
+- Auto mode state (active, paused, stopped)
+
+### Dashboard Layout
+
+```
+╭─ GSD Status ───────────────────────────────────────────────────────────╮
+│                                                                          │
+│  🎯 M001: Payment integrations                                           │
+│  ████████████████░░░░░░░░░░░░░░  60% (3/5 slices)                       │
+│                                                                          │
+│  🔄 S03: Webhook handling                                                │
+│  ██████████░░░░░░░░░░  50% (1/2 tasks)                             │
+│                                                                          │
+│  ⚙️  Current: T02 — Webhook signature verification                      │
+│  📦 Phase: execute                                                       │
+│  ⏱️  Elapsed: 4m 23s                                                      │
+│                                                                          │
+│  💵 Session cost: $1.24 · 45k tokens                                     │
+│  📊 Project total: $18.67 · 1.2M tokens                                  │
+│  📈 Projected milestone: ~$31.00 (2 slices remaining @ avg $6.22)        │
+│                                                                          │
+│  ✓ Completed units:                                                      │
+│    S01 — Stripe integration ($3.45, 6m 12s, 234k tokens)                 │
+│    S02 — PayPal integration ($2.34, 4m 56s, 189k tokens)                 │
+│    S03/T01 — Webhook receiver endpoint ($0.89, 2m 11s, 67k tokens)       │
+│                                                                          │
+│  📝 Recent decisions:                                                    │
+│    • Use HMAC SHA-256 for webhook signatures                            │
+│    • Store webhook events in PostgreSQL for replay                       │
+│                                                                          │
+╰────────────────────────────────────────────────────────────────────────╯
+```
+
+### Dashboard Sections
+
+#### Active Milestone
+
+```
+🎯 M001: Payment integrations
+████████████████░░░░░░░░░░░░░░  60% (3/5 slices)
+```
+
+- Milestone ID and title
+- Progress bar (visual completion)
+- Percentage and slice counts
+
+#### Active Slice
+
+```
+🔄 S03: Webhook handling
+██████████░░░░░░░░░░  50% (1/2 tasks)
+```
+
+- Slice ID and title
+- Task-level progress
+
+#### Current Unit
+
+```
+⚙️  Current: T02 — Webhook signature verification
+📦 Phase: execute
+⏱️  Elapsed: 4m 23s
+```
+
+- Task or phase currently executing
+- Phase type (research, plan, execute, complete, reassess)
+- Elapsed time for the current unit
+
+#### Cost Breakdown
+
+```
+💵 Session cost: $1.24 · 45k tokens
+📊 Project total: $18.67 · 1.2M tokens
+📈 Projected milestone: ~$31.00 (2 slices remaining @ avg $6.22)
+```
+
+- **Session cost** — Cost since last `/gsd auto` or `/gsd next` invocation
+- **Project total** — Cumulative cost across all sessions (from `.gsd/metrics.jsonl`)
+- **Projected milestone** — Estimated total cost based on average slice cost
+
+#### Completed Units
+
+```
+✓ Completed units:
+  S01 — Stripe integration ($3.45, 6m 12s, 234k tokens)
+  S02 — PayPal integration ($2.34, 4m 56s, 189k tokens)
+  S03/T01 — Webhook receiver ($0.89, 2m 11s, 67k tokens)
+```
+
+Shows the last 5 completed units with:
+
+- Unit ID and title
+- Total cost for that unit
+- Duration
+- Token usage
+
+#### Recent Decisions
+
+```
+📝 Recent decisions:
+  • Use HMAC SHA-256 for webhook signatures
+  • Store webhook events in PostgreSQL for replay
+```
+
+Shows the 3 most recent entries from `.gsd/DECISIONS.md`.
+
+## When to Check Status
+
+<CardGroup cols={2}>
+  <Card title="During Auto Mode" icon="robot">
+    Monitor progress without stopping execution
+  </Card>
+  <Card title="Budget Tracking" icon="coins">
+    See running costs before hitting limits
+  </Card>
+  <Card title="After Pause" icon="pause">
+    Check what completed and what's next
+  </Card>
+  <Card title="Multi-Session" icon="layer-group">
+    See cumulative progress across sessions
+  </Card>
+</CardGroup>
+
+## Status During Auto Mode
+
+The dashboard updates **in real-time** while auto mode runs:
+
+**Terminal 1 (auto mode):**
+
+```bash
+gsd
+/gsd auto
+```
+
+**Terminal 2 (status):**
+
+```bash
+gsd
+# Press Ctrl+Alt+G
+# Dashboard shows live progress
+```
+
+The overlay refreshes as units complete. Press `Escape` or `Ctrl+Alt+G` again to close.
+
+## Progress Widget (Auto Mode)
+
+During auto mode, a compact widget shows in the footer:
+
+```
+🤖 auto — M001/S02/T01 — execute — 4m 23s — $1.24 — 45k tokens — claude-sonnet-4-6
+```
+
+**Fields:**
+
+- **Mode** — `auto` (running), `paused` (escape pressed), or `step` (step mode)
+- **Location** — Current milestone/slice/task
+- **Phase** — `research`, `plan`, `execute`, `complete`, `reassess`
+- **Elapsed** — Time since unit started
+- **Cost** — Running session cost
+- **Tokens** — Running session token count
+- **Model** — Current model (may vary per phase if configured in preferences)
+
+## Cost Projections
+
+After the first slice completes, GSD estimates the total milestone cost:
+
+```
+📈 Projected milestone: ~$31.00 (2 slices remaining @ avg $6.22)
+```
+
+**Calculation:**
+
+- **Average slice cost** = (sum of completed slice costs) / (number of completed slices)
+- **Projected total** = (completed cost) + (remaining slices × average)
+
+This helps you decide:
+
+- Whether to continue or tune model selection
+- If you're approaching your budget ceiling
+- Whether to parallelize work with worktrees
+
+## Queue: Future Milestones
+
+`/gsd queue` plans **future milestones** without executing them immediately.
+
+### When to Use Queue
+
+<CardGroup cols={2}>
+  <Card title="Multi-Milestone Vision" icon="map">
+    Capture the full roadmap upfront
+  </Card>
+  <Card title="Dependency Sequencing" icon="link">
+    Define milestone order and blockers
+  </Card>
+  <Card title="During Auto Mode" icon="forward-fast">
+    Queue M002 while M001 is building
+  </Card>
+  <Card title="Parallel Work" icon="code-branch">
+    Create worktrees for independent milestones
+  </Card>
+</CardGroup>
+
+### Queue Flow
+
+```bash
+/gsd queue
+```
+
+**GSD asks:**
+
+1. What's the next milestone about?
+2. What does it depend on? (prior milestones, external blockers)
+3. What's the rough scope? (number of slices)
+
+**GSD writes:**
+
+- `.gsd/QUEUE.md` — Ordered list of pending milestones
+- `.gsd/M00X-CONTEXT.md` (stub) — High-level context for the milestone
+
+### Example Queue Session
+
+```bash
+$ gsd
+/gsd queue
+
+💬 What's the next milestone?
+
+> M002: User authentication and authorization
+
+💬 What does it depend on?
+
+  ◯ Nothing — can start immediately
+  ◯ M001 must be complete
+  ◯ External blocker (specify)
+
+> M001 must be complete
+
+💬 Rough scope estimate?
+
+> 4-6 slices: signup, login, password reset, role-based access, session management, OAuth integration
+
+✓ Queued: M002 — User authentication and authorization
+
+Written to:
+  .gsd/QUEUE.md
+  .gsd/M002-CONTEXT.md (stub)
+
+When M001 completes, auto mode will pick up M002 automatically.
+```
+
+### Queue During Auto Mode
+
+Queue milestones while auto mode runs:
+
+**Terminal 1 (auto mode):**
+
+```bash
+gsd
+/gsd auto
+# Building M001
+```
+
+**Terminal 2 (queue):**
+
+```bash
+gsd
+/gsd queue
+# Queue M002, M003, M004
+```
+
+When M001 completes, auto mode reads `QUEUE.md` and starts M002 automatically.
+
+## Requirements Status
+
+The dashboard shows **requirements tracking** if `REQUIREMENTS.md` exists:
+
+```
+📋 Requirements: 12 active · 8 validated · 3 deferred · 2 out of scope
+```
+
+**States:**
+
+- **Active** — Not yet validated (still in progress)
+- **Validated** — Implementation verified (tests pass, behavior confirmed)
+- **Deferred** — Moved to a future milestone
+- **Out of scope** — Explicitly excluded
+
+See [Requirements](/concepts/milestones-slices-tasks) for details.
+
+## Blockers
+
+If the project has blockers, they're shown prominently:
+
+```
+⚠️  Blockers:
+  • Waiting for API key from payment provider
+  • Database migration pending (run `npm run migrate`)
+```
+
+Blockers come from:
+
+- `CONTEXT.md` (depends_on: external dependencies)
+- Task summaries (when a task can't complete without external input)
+- Doctor diagnostics (integrity issues)
+
+## Metrics File
+
+All cost and token data is stored in `.gsd/metrics.jsonl` (gitignored):
+
+```jsonl
+{"timestamp":"2026-03-13T10:23:45Z","unit":"M001/S01","phase":"execute","model":"claude-sonnet-4-6","tokens":{"input":12450,"output":3890},"cost":0.18}
+{"timestamp":"2026-03-13T10:25:08Z","unit":"M001/S01","phase":"complete","model":"claude-sonnet-4-6","tokens":{"input":8234,"output":2156},"cost":0.11}
+```
+
+This file is **append-only**. The dashboard aggregates it on-demand.
+
+## Dashboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+Alt+G` | Toggle dashboard overlay |
+| `Escape` | Close dashboard (if open) |
+| `Ctrl+Alt+B` | Show background shell processes |
+
+## Cost Breakdown by Model
+
+If you use different models per phase (configured in preferences), the dashboard breaks down cost by model:
+
+```
+💵 Cost by model:
+  claude-opus-4-6:   $8.23 (planning only)
+  claude-sonnet-4-6: $10.44 (research, execution, completion)
+```
+
+## Multi-Session Tracking
+
+Metrics persist across sessions. If you stop and resume:
+
+```bash
+# Day 1
+/gsd auto
+# Complete S01, S02, then stop
+
+# Day 2
+/gsd auto
+# Resume from S03
+```
+
+The dashboard shows **cumulative cost** from Day 1 + Day 2.
+
+## Status with No Active Milestone
+
+If no milestones exist:
+
+```bash
+/gsd status
+
+ℹ️  No GSD milestones found. Run /gsd to start.
+```
+
+If all milestones are complete:
+
+```bash
+/gsd status
+
+✓ All milestones complete!
+
+  M001: Payment integrations ($31.45, 18 slices)
+  M002: User authentication ($24.67, 12 slices)
+
+  Total project cost: $56.12
+
+Queue the next milestone:
+  /gsd queue
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Run autonomous mode and monitor with status
+  </Card>
+  <Card title="Preferences" icon="sliders" href="/commands/preferences">
+    Configure budget ceilings and model selection
+  </Card>
+  <Card title="Doctor" icon="stethoscope" href="/commands/doctor">
+    Validate project integrity
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Run `/gsd auto` and check progress with `Ctrl+Alt+G`
+2. Use `/gsd queue` to plan future milestones
+3. Configure a budget ceiling in preferences to pause before overspending

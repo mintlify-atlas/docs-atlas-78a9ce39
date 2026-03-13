@@ -1,0 +1,227 @@
+---
+title: 'roadmap.md'
+description: 'Milestone roadmap file format with slice checkboxes and boundary map'
+icon: 'map'
+---
+
+## Overview
+
+`roadmap.md` is the **milestone plan** that lives at `.gsd/milestones/<MNN>/roadmap.md`. It defines all slices for a milestone, their dependencies, risk levels, and what each slice produces and consumes.
+
+<Info>
+This is the **source of truth** for which slices exist and which are complete.
+</Info>
+
+## File Format
+
+```markdown
+# M001: Title of the Milestone
+
+**Vision:** One paragraph describing what this milestone delivers.
+
+**Success Criteria:**
+- Observable outcome 1
+- Observable outcome 2
+
+---
+
+## Slices
+
+- [ ] **S01: Slice Title** `risk:low` `depends:[]`
+  > After this: what the user can demo when this slice is done.
+
+- [ ] **S02: Another Slice** `risk:medium` `depends:[S01]`
+  > After this: demo sentence.
+
+- [x] **S03: Completed Slice** `risk:low` `depends:[S01]`
+  > After this: demo sentence.
+
+## Boundary Map
+
+### S01 → S02
+Produces:
+  types.ts → User, Session, AuthToken (interfaces)
+  auth.ts  → generateToken(), verifyToken(), refreshToken()
+
+Consumes: nothing (leaf node)
+
+### S02 → S03
+Produces:
+  api/auth/login.ts  → POST handler
+  api/auth/signup.ts → POST handler
+  middleware.ts       → authMiddleware()
+
+Consumes from S01:
+  auth.ts → generateToken(), verifyToken()
+```
+
+## Slice Checkbox Format
+
+<ParamField path="checkbox" type="string" required>
+  `- [ ]` for incomplete, `- [x]` for complete. This is parsed as the source of truth for slice completion status.
+</ParamField>
+
+<ParamField path="id" type="string" required>
+  Slice ID in format `S01`, `S02`, etc. Used in dependency references.
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Short descriptive title in format `**S01: Slice Title**`
+</ParamField>
+
+<ParamField path="risk" type="enum" required>
+  Risk level: `risk:low`, `risk:medium`, or `risk:high`. High-risk slices should be ordered first to validate feasibility early.
+</ParamField>
+
+<ParamField path="depends" type="array" required>
+  List of slice IDs that must be complete before this slice can start. Format: `depends:[S01,S02]` or `depends:[]` for no dependencies.
+</ParamField>
+
+<ParamField path="demo" type="string" required>
+  Demo sentence starting with "After this:" that describes what the user can demo when this slice is done.
+</ParamField>
+
+## Parsing Rules
+
+<CardGroup cols={2}>
+  <Card title="Completion Status" icon="check-square">
+    `- [x]` = done, `- [ ]` = not done. Parse checkbox state as boolean.
+  </Card>
+  <Card title="Inline Metadata" icon="tag">
+    `risk:` and `depends:[]` are inline metadata parsed from the same line as the slice title.
+  </Card>
+  <Card title="Dependencies" icon="diagram-project">
+    `depends:[S01]` lists slice IDs. Check these are complete before starting the slice.
+  </Card>
+  <Card title="Demo Sentence" icon="presentation">
+    Quote block starting with `> After this:` describes the demoable outcome.
+  </Card>
+</CardGroup>
+
+## Boundary Map (Required)
+
+The **Boundary Map** is a required section that forces upfront thinking about slice interfaces before implementation.
+
+### Purpose
+
+- Forces interface thinking before implementation
+- Gives downstream slices a concrete target to code against
+- Enables deterministic verification that slices actually connect
+- Gets updated during slice planning if new interfaces emerge
+
+### Format
+
+For each slice, specify:
+
+<ParamField path="Produces" type="object" required>
+  Files and their exports that this slice creates. Format: `file.ts → export1(), export2(), Type1 (interface)`
+</ParamField>
+
+<ParamField path="Consumes" type="object" required>
+  What this slice imports from upstream slices. Format: `file.ts → function()` or "nothing (leaf node)" for slices with no dependencies.
+</ParamField>
+
+### Example Boundary Map Entry
+
+```markdown
+### S01 → S02
+Produces:
+  types.ts → User, Session, AuthToken (interfaces)
+  auth.ts  → generateToken(), verifyToken(), refreshToken()
+
+Consumes: nothing (leaf node)
+```
+
+## Update Semantics
+
+<CardGroup cols={2}>
+  <Card title="During Planning" icon="pencil">
+    Written once during milestone planning phase. Slices and boundary map defined.
+  </Card>
+  <Card title="Slice Completion" icon="check">
+    Mark slice checkbox as `[x]` when all tasks complete and slice summary is written.
+  </Card>
+  <Card title="Interface Changes" icon="rotate">
+    Update boundary map during slice planning if interfaces evolve.
+  </Card>
+  <Card title="Never Edit" icon="ban">
+    Do not edit slice titles, IDs, or demo sentences after creation. These are immutable.
+  </Card>
+</CardGroup>
+
+## Dependency Validation
+
+Before starting a slice, verify:
+
+1. All slices in `depends:[]` have `[x]` checkboxes
+2. Upstream slices' actual outputs match what the boundary map says this slice consumes
+3. If outputs diverge, update the boundary map before proceeding
+
+## Example
+
+```markdown
+# M001: Authentication System
+
+**Vision:** Secure JWT-based authentication with refresh tokens and email verification.
+
+**Success Criteria:**
+- Users can sign up and log in with email/password
+- Refresh tokens rotate on use
+- Email verification required before account activation
+
+---
+
+## Slices
+
+- [x] **S01: Core Auth Primitives** `risk:high` `depends:[]`
+  > After this: JWT token generation and verification working with test harness.
+
+- [ ] **S02: Registration Flow** `risk:medium` `depends:[S01]`
+  > After this: User can create account via API endpoint, receives verification email.
+
+- [ ] **S03: Login Flow** `risk:low` `depends:[S01,S02]`
+  > After this: Verified user can log in and receive access/refresh token pair.
+
+## Boundary Map
+
+### S01 → S02, S03
+Produces:
+  lib/auth.ts → generateToken(payload), verifyToken(token), refreshRotate(token)
+  types/auth.ts → TokenPair, JWTPayload (interfaces)
+
+Consumes: nothing (leaf node)
+
+### S02 → S03
+Produces:
+  api/auth/signup.ts → POST handler
+  lib/email.ts → sendVerification(email, token)
+  db/users.ts → createUser(data), findByEmail(email)
+
+Consumes from S01:
+  lib/auth.ts → generateToken()
+  types/auth.ts → JWTPayload
+
+### S03 → (future slices)
+Produces:
+  api/auth/login.ts → POST handler
+  middleware.ts → requireAuth() middleware
+
+Consumes from S01:
+  lib/auth.ts → verifyToken(), refreshRotate()
+Consumes from S02:
+  db/users.ts → findByEmail()
+```
+
+## Related Files
+
+<CardGroup cols={3}>
+  <Card title="plan.md" href="/api/plan-md" icon="clipboard-list">
+    Slice-level task decomposition
+  </Card>
+  <Card title="summary.md" href="/api/summary-md" icon="file-lines">
+    Milestone rollup summary
+  </Card>
+  <Card title="decisions.md" href="/api/decisions-md" icon="scale-balanced">
+    Decisions register
+  </Card>
+</CardGroup>

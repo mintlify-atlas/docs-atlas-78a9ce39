@@ -1,0 +1,225 @@
+---
+title: 'continue.md'
+description: 'Ephemeral resume-point file format for interrupted tasks'
+icon: 'play'
+---
+
+## Overview
+
+`continue.md` is an **ephemeral resume-point file** that lives at `.gsd/milestones/<MNN>/slices/<SNN>/continue.md`. It captures the exact state of an interrupted task so work can resume seamlessly.
+
+<Info>
+**Ephemeral:** This file is **deleted after consumption**. It's not a permanent record — it's a handoff protocol.
+</Info>
+
+## When to Write
+
+Write `continue.md` when:
+
+- **Context is getting full** — You're about to lose context (compaction, session end)
+- **Task isn't done** — The current task is incomplete
+- **Manual pause** — You want to pause and come back later (Ctrl+C, intentional break)
+
+<Warning>
+**Do NOT write `continue.md` between tasks.** If a task is complete, just update `state.md` with the next action. `continue.md` is only for mid-task interruptions.
+</Warning>
+
+## File Format
+
+```markdown
+---
+milestone: M001
+slice: S01
+task: T02
+step: 3
+total_steps: 7
+saved_at: 2026-03-07T15:30:00Z
+---
+
+## Completed Work
+- What's already done in this task and prior tasks in the slice.
+
+## Remaining Work
+- What steps remain, with enough detail to resume.
+
+## Decisions Made
+- Key decisions and WHY (so next session doesn't re-debate).
+
+## Context
+The "vibe" — what you were thinking, what's tricky, what to watch out for.
+
+## Next Action
+The EXACT first thing to do when resuming. Not vague. Specific.
+```
+
+## Frontmatter Fields
+
+<ResponseField name="milestone" type="string" required>
+  Milestone ID in format `M001`
+</ResponseField>
+
+<ResponseField name="slice" type="string" required>
+  Slice ID in format `S01`
+</ResponseField>
+
+<ResponseField name="task" type="string" required>
+  Task ID in format `T02`
+</ResponseField>
+
+<ResponseField name="step" type="number" required>
+  Current step number (where you paused). 1-indexed.
+</ResponseField>
+
+<ResponseField name="total_steps" type="number" required>
+  Total number of steps in the task plan.
+</ResponseField>
+
+<ResponseField name="saved_at" type="timestamp" required>
+  ISO 8601 timestamp of when this file was written.
+</ResponseField>
+
+## Content Sections
+
+<ParamField path="Completed Work" type="prose" required>
+  What's already done in this task and prior tasks in the slice. Gives the resuming session full context on what exists.
+  
+  Be specific:
+  - "Implemented generateToken() in auth.ts"
+  - "Unit tests passing for token generation"
+  - "Added TypeScript interfaces in types/auth.ts"
+</ParamField>
+
+<ParamField path="Remaining Work" type="list" required>
+  What steps remain, with enough detail to resume. Don't just say "steps 4-7" — explain what each step involves.
+  
+  Example:
+  - Step 4: Implement verifyToken() with signature validation
+  - Step 5: Add expiration check logic
+  - Step 6: Write error handling tests
+  - Step 7: Run full test suite and verify coverage
+</ParamField>
+
+<ParamField path="Decisions Made" type="list" required>
+  Key decisions made so far and **WHY**. This prevents the next session from re-debating choices.
+  
+  Example:
+  - "Used jose SignJWT instead of jsonwebtoken — better TS support"
+  - "Set token expiration to 15min — industry standard for security/UX balance"
+</ParamField>
+
+<ParamField path="Context" type="prose" required>
+  The "vibe" — what you were thinking, what's tricky, what to watch out for. Capture intuition and gotchas.
+  
+  Example:
+  "Token verification needs careful error handling — distinguish between expired tokens (401) and invalid signatures (403). The jose library throws JWTExpired and JWTInvalid errors that need to be caught separately."
+</ParamField>
+
+<ParamField path="Next Action" type="string" required>
+  **Most important field.** The EXACT first thing to do when resuming. Not vague. Specific.
+  
+  Good examples:
+  - "Open src/lib/auth.ts and add verifyToken() function below generateToken()"
+  - "Run `npm test auth.test.ts` to see current test failures"
+  - "Read jose documentation for JWTVerify usage"
+  
+  Bad examples:
+  - "Continue with verification" (too vague)
+  - "Work on step 4" (not specific enough)
+</ParamField>
+
+## Resume Protocol
+
+When resuming from `continue.md`:
+
+1. **Read** `continue.md` to understand the state
+2. **Delete** `continue.md` immediately (it's consumed, not permanent)
+3. **Pick up** from the "Next Action" specified in the file
+
+<Warning>
+**Critical:** Always delete `continue.md` after reading it. If you don't, it will cause confusion in future sessions.
+</Warning>
+
+## Example
+
+```markdown
+---
+milestone: M001
+slice: S01
+task: T02
+step: 3
+total_steps: 6
+saved_at: 2026-03-07T15:30:00Z
+---
+
+## Completed Work
+- Implemented generateToken() in src/lib/auth.ts using jose/SignJWT
+- Added TokenPair and JWTPayload interfaces in src/types/auth.ts
+- Unit tests for token generation passing (auth.test.ts)
+- Verified tokens contain correct payload fields (sub, iat, exp)
+
+## Remaining Work
+- Step 4: Implement verifyToken() with signature validation using jose/jwtVerify
+- Step 5: Add expiration check logic and error handling for JWTExpired/JWTInvalid
+- Step 6: Write comprehensive unit tests for verifyToken covering success and error cases
+
+## Decisions Made
+- Used jose instead of jsonwebtoken: Better TypeScript support and actively maintained
+- Set access token expiration to 15min: Industry standard balancing security and UX
+- Tokens signed with HS256: Sufficient for current scale, symmetric key simplicity
+
+## Context
+Token verification is trickier than generation. The jose library's jwtVerify function throws different error types (JWTExpired, JWTInvalid, JWSSignatureVerificationFailed) that need to be caught and mapped to appropriate HTTP status codes. Don't catch all errors the same way — expired tokens (401) vs invalid signatures (403) are different security contexts.
+
+Also, the secret key needs to come from process.env.JWT_SECRET — don't hardcode it. The existing generateToken() already does this correctly, so follow the same pattern.
+
+## Next Action
+Open src/lib/auth.ts and add the verifyToken() function below generateToken(). Start by importing jwtVerify from jose, then implement basic signature validation before adding expiration checks.
+```
+
+## Deletion After Consumption
+
+<CardGroup cols={2}>
+  <Card title="When to Delete" icon="trash">
+    Delete `continue.md` immediately after reading it in a resume session.
+  </Card>
+  <Card title="Why Delete" icon="circle-info">
+    It's ephemeral — not a permanent record. Leaving it causes confusion about whether work is interrupted.
+  </Card>
+  <Card title="Task Complete" icon="check">
+    If you find a `continue.md` for a completed task, delete it immediately.
+  </Card>
+  <Card title="Reconciliation" icon="triangle-exclamation">
+    If `state.md` and `continue.md` disagree, pause and surface to the user.
+  </Card>
+</CardGroup>
+
+## Context Pressure Protocol
+
+If you sense context pressure during a task:
+
+1. **Write `continue.md`** with exact resume state
+2. **Tell the user:**
+   > "Context is getting full. I've saved progress to continue.md. Start a new session and run `/gsd` to pick up where you left off, or `/gsd auto` to resume in auto-execution mode."
+3. **Don't fight it** — The system is designed for this. A fresh session with the right files loaded is better than a stale session with degraded reasoning.
+
+## Between Tasks (Don't Use continue.md)
+
+If you're **between tasks** (current task is complete):
+
+- **Do NOT write `continue.md`**
+- **Instead:** Update `state.md` with the next action
+- The next session will read `state.md` and pick up the next task cleanly
+
+## Related Files
+
+<CardGroup cols={3}>
+  <Card title="state.md" href="/api/state-md" icon="gauge">
+    Dashboard for inter-task state
+  </Card>
+  <Card title="plan.md" href="/api/plan-md" icon="clipboard-list">
+    Task plans and steps
+  </Card>
+  <Card title="summary.md" href="/api/summary-md" icon="file-lines">
+    Task summaries (permanent record)
+  </Card>
+</CardGroup>

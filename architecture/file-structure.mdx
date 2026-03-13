@@ -1,0 +1,244 @@
+---
+title: File Structure
+description: Where everything lives — global config, project state, and the pkg/ shim
+---
+
+GSD manages files in three locations: global configuration in `~/.gsd/`, per-project state in `.gsd/`, and a special `pkg/` shim directory for Pi SDK configuration.
+
+## ~/.gsd/ — Global Application Data
+
+Global configuration and state lives in the user's home directory:
+
+```
+~/.gsd/
+  agent/
+    extensions/          Synced from src/resources/extensions/ on every launch
+      gsd/               Core GSD extension (auto mode, commands, state management)
+      bg-shell/          Background shell process management
+      browser-tools/     Playwright-based browser automation
+      context7/          Library documentation lookup
+      search-the-web/    Brave/Tavily/Jina web search
+      subagent/          Delegated task execution
+      mac-tools/         macOS automation (Accessibility APIs)
+      slash-commands/    Custom command creation
+      ask-user-questions.ts
+      get-secrets-from-user.ts
+      shared/            Shared utilities (imported by extensions)
+    agents/              Synced from src/resources/agents/ on every launch
+      scout.md           Fast codebase reconnaissance
+      researcher.md      Web research agent
+      worker.md          General-purpose execution agent
+    skills/              Synced from src/resources/skills/ on every launch
+    AGENTS.md            Agent routing instructions
+    bin/                 Managed tool binaries (fd, rg)
+    auth.json            Encrypted LLM provider credentials
+  sessions/              Session storage (per-directory scoping)
+    --path-to-project--/
+      session-id.jsonl   Conversation history for project sessions
+  preferences.md         Global preferences (models, timeouts, budget)
+```
+
+### Extension and Agent Sync
+
+Extensions and agents are synced to `~/.gsd/agent/` on **every launch**, not just first run. This ensures `npm update -g gsd-pi` takes effect immediately.
+
+**From resource-loader.ts:**
+
+```typescript
+export function initResources(agentDir: string): void {
+  mkdirSync(agentDir, { recursive: true })
+
+  // Sync extensions — always overwrite so updates land on next launch
+  const destExtensions = join(agentDir, 'extensions')
+  cpSync(bundledExtensionsDir, destExtensions, { recursive: true, force: true })
+
+  // Sync agents
+  const destAgents = join(agentDir, 'agents')
+  const srcAgents = join(resourcesDir, 'agents')
+  if (existsSync(srcAgents)) {
+    cpSync(srcAgents, destAgents, { recursive: true, force: true })
+  }
+}
+```
+
+### Session Storage
+
+Sessions are scoped per-directory. When you run `gsd` in a project, sessions are stored in:
+
+```
+~/.gsd/sessions/--path-to-your-project--/
+```
+
+The `/resume` command only shows sessions from the current working directory.
+
+**Legacy migration:** Older GSD versions stored sessions flat in `~/.gsd/sessions/`. On first launch, these are automatically migrated to the correct per-directory subdirectory.
+
+**From cli.ts:**
+
+```typescript
+const cwd = process.cwd()
+const safePath = `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
+const projectSessionsDir = join(sessionsDir, safePath)
+
+// Migrate legacy flat sessions
+if (existsSync(sessionsDir)) {
+  const entries = readdirSync(sessionsDir)
+  const flatJsonl = entries.filter(f => f.endsWith('.jsonl'))
+  if (flatJsonl.length > 0) {
+    mkdirSync(projectSessionsDir, { recursive: true })
+    for (const file of flatJsonl) {
+      const src = join(sessionsDir, file)
+      const dst = join(projectSessionsDir, file)
+      if (!existsSync(dst)) {
+        renameSync(src, dst)
+      }
+    }
+  }
+}
+```
+
+## .gsd/ — Project State
+
+Per-project state lives in `.gsd/` at the project root. This is the source of truth for auto mode.
+
+```
+.gsd/
+  STATE.md                          Dashboard — current milestone/slice/task, next action
+  DECISIONS.md                      Append-only decisions register
+  PROJECT.md                        Living doc — what the project is right now
+  milestones/
+    M001/
+      roadmap.md                    Milestone plan with slice checkboxes
+      context.md                    User decisions from discuss phase (optional)
+      research.md                   Codebase/ecosystem research (optional)
+      summary.md                    Milestone rollup (updated as slices complete)
+      slices/
+        S01/
+          plan.md                   Task decomposition for this slice
+          context.md                Slice-level user decisions (optional)
+          research.md               Slice-level research (optional)
+          summary.md                Slice summary (written on completion)
+          uat.md                    Human test script (written on completion)
+          continue.md               Resume point if interrupted (ephemeral)
+          tasks/
+            T01-plan.md             Individual task plan
+            T01-summary.md          Task summary with YAML frontmatter
+```
+
+### State Files as Source of Truth
+
+**STATE.md** is a derived cache. The real sources of truth are:
+
+- `roadmap.md` → which slices exist and which are done (checkboxes)
+- `plan.md` → which tasks exist within a slice (checkboxes)
+- `TNN-summary.md` → what happened during a task (YAML frontmatter + narrative)
+- `summary.md` → compressed outcomes for slices and milestones
+
+Auto mode reads these files to determine what to do next, dispatches an agent, waits for completion, then reads them again.
+
+### Checkpoint and Recovery
+
+**continue.md** is an ephemeral checkpoint file. If a task is interrupted mid-execution (Ctrl+C, crash, timeout), the agent writes `continue.md` with:
+
+- Completed work so far
+- Remaining steps
+- Decisions made and WHY
+- Exact next action
+
+On resume, the agent reads `continue.md`, deletes it, and picks up exactly where it left off.
+
+## pkg/ — Pi SDK Shim Directory
+
+The `pkg/` directory is a shim that isolates Pi SDK configuration from GSD's source code.
+
+```
+pkg/
+  package.json              piConfig.name = "gsd" (branding)
+  dist/
+    modes/
+      interactive/
+        theme/                Pi's theme assets (CSS, icons, etc.)
+```
+
+### Why pkg/ Exists
+
+Pi's config loader (`config.js`) resolves themes using this logic:
+
+1. Look for `${PI_PACKAGE_DIR}/src/modes/interactive/theme/`
+2. If `src/` doesn't exist, fall back to `${PI_PACKAGE_DIR}/dist/modes/interactive/theme/`
+
+If `PI_PACKAGE_DIR` pointed to GSD's project root, Pi would find GSD's `src/` directory and fail to load themes because GSD's `src/` doesn't contain theme assets.
+
+**The solution:** `PI_PACKAGE_DIR` points to `pkg/`, which contains only:
+
+- `package.json` with `piConfig` (for branding)
+- `dist/modes/interactive/theme/` (theme assets)
+
+No `src/` directory exists in `pkg/`, so Pi resolves themes correctly.
+
+**From loader.ts:**
+
+```typescript
+// pkg/ is a shim directory: contains gsd's piConfig (package.json) and pi's
+// theme assets (dist/modes/interactive/theme/) without a src/ directory.
+// This allows config.js to:
+//   1. Read piConfig.name → "gsd" (branding)
+//   2. Resolve themes via dist/ (no src/ present → uses dist path)
+const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'pkg')
+
+// MUST be set before any dynamic import of pi SDK fires — this is what config.js
+// reads to determine APP_NAME and CONFIG_DIR_NAME
+process.env.PI_PACKAGE_DIR = pkgDir
+```
+
+### Other Environment Variables
+
+The loader also sets several other environment variables before importing `cli.ts`:
+
+```typescript
+// Tell Pi to use ~/.gsd/agent/ instead of ~/.pi/agent/
+process.env.GSD_CODING_AGENT_DIR = agentDir
+
+// Make gsd's node_modules available to extensions loaded via jiti
+process.env.NODE_PATH = gsdNodeModules
+
+// Expose package version to extensions
+process.env.GSD_VERSION = gsdPkg.version
+
+// Absolute path to loader (used by subagent to spawn gsd)
+process.env.GSD_BIN_PATH = process.argv[1]
+
+// Absolute path to bundled GSD-WORKFLOW.md
+process.env.GSD_WORKFLOW_PATH = join(resourcesDir, 'GSD-WORKFLOW.md')
+
+// Colon-joined list of bundled extension entry points
+process.env.GSD_BUNDLED_EXTENSION_PATHS = [...].join(':')
+```
+
+## Directory Rationale Summary
+
+<CardGroup cols={2}>
+  <Card title="~/.gsd/agent/" icon="wrench">
+    **Global tooling:** Extensions, agents, skills, managed binaries. Always-overwrite sync ensures updates ship immediately.
+  </Card>
+  <Card title="~/.gsd/sessions/" icon="clock">
+    **Session history:** Per-directory scoping. `/resume` only shows sessions from current project.
+  </Card>
+  <Card title=".gsd/" icon="folder">
+    **Project state:** Milestones, slices, tasks, summaries. Source of truth for auto mode.
+  </Card>
+  <Card title="pkg/" icon="box">
+    **SDK shim:** Isolates Pi config and theme assets. Avoids collision with GSD's src/ directory.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Loader Pattern" href="/architecture/loader-pattern" icon="code">
+    Why PI_PACKAGE_DIR must be set before SDK imports
+  </Card>
+  <Card title="Pi SDK Integration" href="/architecture/pi-sdk-integration" icon="plug">
+    How GSD embeds the Pi coding agent SDK
+  </Card>
+</CardGroup>

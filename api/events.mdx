@@ -1,0 +1,347 @@
+---
+title: "Events"
+description: "Event system for inter-extension communication and coordination"
+---
+
+## Overview
+
+Pi's event system provides a loosely-coupled way for extensions to:
+- Communicate without direct dependencies
+- Coordinate workflows across extensions
+- React to state changes from other extensions
+- Implement pub/sub patterns
+
+Events are distinct from hooks: hooks intercept Pi's core lifecycle, while events enable extension-to-extension communication.
+
+## Core Concepts
+
+### Hooks vs Events
+
+| Feature | Hooks | Events |
+|---------|-------|--------|
+| **Purpose** | Intercept Pi's agent loop | Extension-to-extension communication |
+| **Source** | Pi's core runtime | Extensions themselves |
+| **Built-in** | Yes (`before_agent_start`, `agent_end`, etc.) | No, extensions define custom events |
+| **Use Case** | Modify system behavior | Coordinate between extensions |
+
+### Event Names
+
+Extensions can emit custom events with any name:
+
+```typescript
+pi.emit("myextension:task_completed", { taskId: "T01", status: "success" });
+```
+
+<Tip>
+  Prefix event names with your extension name to avoid collisions: `"myext:event"`
+</Tip>
+
+## Subscribing to Events
+
+<ParamField path="on" type="(eventName: string, handler: (data: any, ctx: ExtensionContext) => void) => void">
+  Subscribe to custom events from other extensions:
+
+  ```typescript
+  export default function (pi: ExtensionAPI) {
+    pi.on("gsd:unit_complete", (data, ctx) => {
+      console.log(`Unit ${data.unitId} completed in ${data.duration}ms`);
+      
+      // React to the event
+      if (data.unitType === "execute-task") {
+        emitMetrics(data);
+      }
+    });
+  }
+  ```
+</ParamField>
+
+## Emitting Events
+
+<ParamField path="emit" type="(eventName: string, data: any) => void">
+  Emit custom events for other extensions to consume:
+
+  ```typescript
+  pi.emit("myext:state_changed", {
+    milestone: "M001",
+    phase: "executing",
+    timestamp: Date.now()
+  });
+  ```
+
+  From `gsd/auto.ts` (hypothetical):
+  ```typescript
+  async function completeUnit(unitType: string, unitId: string) {
+    const duration = Date.now() - currentUnit.startedAt;
+    
+    // Emit event for metrics/observability extensions
+    pi.emit("gsd:unit_complete", {
+      unitType,
+      unitId,
+      duration,
+      tokens: getTotalTokens(),
+      cost: estimateCost()
+    });
+  }
+  ```
+</ParamField>
+
+## Event Patterns
+
+### 1. State Change Notifications
+
+Notify other extensions when your state changes:
+
+```typescript
+export default function (pi: ExtensionAPI) {
+  let currentMilestone: string | null = null;
+
+  pi.on("agent_end", async (event, ctx) => {
+    const state = await deriveState();
+    
+    if (state.activeMilestone?.id !== currentMilestone) {
+      currentMilestone = state.activeMilestone?.id ?? null;
+      
+      pi.emit("myext:milestone_changed", {
+        from: currentMilestone,
+        to: state.activeMilestone?.id,
+        timestamp: Date.now()
+      });
+    }
+  });
+}
+```
+
+### 2. Command Completion
+
+Signal when a long-running command finishes:
+
+```typescript
+pi.registerCommand("deploy", {
+  description: "Deploy the application",
+  async handler(args, ctx) {
+    const startTime = Date.now();
+    
+    try {
+      await runDeployment();
+      
+      pi.emit("deploy:complete", {
+        status: "success",
+        duration: Date.now() - startTime
+      });
+    } catch (error) {
+      pi.emit("deploy:complete", {
+        status: "error",
+        error: error.message,
+        duration: Date.now() - startTime
+      });
+    }
+  }
+});
+```
+
+### 3. Extension Coordination
+
+Coordinate workflows across multiple extensions:
+
+```typescript
+// Extension A: Emits when ready
+export default function extensionA(pi: ExtensionAPI) {
+  pi.on("session_start", async (event, ctx) => {
+    const config = await loadConfig();
+    pi.emit("extA:ready", { config });
+  });
+}
+
+// Extension B: Waits for Extension A
+export default function extensionB(pi: ExtensionAPI) {
+  let extensionAConfig: any = null;
+
+  pi.on("extA:ready", (data, ctx) => {
+    extensionAConfig = data.config;
+    ctx.ui.notify("Extension A ready, starting Extension B", "info");
+  });
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (!extensionAConfig) return;
+    
+    // Use config from Extension A
+    return {
+      systemPrompt: `${event.systemPrompt}\n\nExtension A config: ${JSON.stringify(extensionAConfig)}`
+    };
+  });
+}
+```
+
+### 4. Metrics Collection
+
+Centralize metrics from multiple extensions:
+
+```typescript
+// Metrics extension
+export default function metricsExtension(pi: ExtensionAPI) {
+  const metrics: any[] = [];
+
+  // Subscribe to events from all extensions
+  pi.on("*:unit_complete", (data, ctx) => {
+    metrics.push({
+      timestamp: Date.now(),
+      source: "unit",
+      data
+    });
+  });
+
+  pi.on("*:command_executed", (data, ctx) => {
+    metrics.push({
+      timestamp: Date.now(),
+      source: "command",
+      data
+    });
+  });
+
+  pi.registerCommand("metrics", {
+    description: "Show collected metrics",
+    async handler(args, ctx) {
+      ctx.ui.notify(`Collected ${metrics.length} metrics`, "info");
+      console.log(metrics);
+    }
+  });
+}
+```
+
+<Note>
+  Wildcard subscriptions (`"*:event"`) are not built into Pi but can be implemented by naming conventions.
+</Note>
+
+### 5. Plugin Registration
+
+Discovery pattern for plugins:
+
+```typescript
+// Core extension
+export default function coreExtension(pi: ExtensionAPI) {
+  const plugins: any[] = [];
+
+  pi.on("plugin:register", (data, ctx) => {
+    plugins.push(data);
+    ctx.ui.notify(`Plugin registered: ${data.name}`, "info");
+  });
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    // Use registered plugins
+    for (const plugin of plugins) {
+      if (plugin.beforeAgentStart) {
+        await plugin.beforeAgentStart(event, ctx);
+      }
+    }
+  });
+}
+
+// Plugin extension
+export default function pluginExtension(pi: ExtensionAPI) {
+  pi.on("session_start", async (event, ctx) => {
+    pi.emit("plugin:register", {
+      name: "MyPlugin",
+      version: "1.0.0",
+      beforeAgentStart: async (event: any, ctx: any) => {
+        // Plugin logic
+      }
+    });
+  });
+}
+```
+
+## Event Data Structure
+
+No enforced schema, but recommended structure:
+
+```typescript
+interface CustomEventData {
+  // Required
+  timestamp: number;
+  source: string;  // Extension name
+  
+  // Optional metadata
+  version?: string;
+  userId?: string;
+  sessionId?: string;
+  
+  // Event-specific payload
+  [key: string]: any;
+}
+
+pi.emit("myext:event", {
+  timestamp: Date.now(),
+  source: "myextension",
+  version: "1.0.0",
+  // ... custom fields
+});
+```
+
+## Async Event Handlers
+
+Event handlers can be async, but Pi won't wait for them:
+
+```typescript
+pi.on("myext:task_complete", async (data, ctx) => {
+  // This runs asynchronously — Pi won't wait
+  await saveMetricsToDatabase(data);
+  await notifySlack(data);
+});
+```
+
+<Warning>
+  Pi doesn't await event handlers. If you need synchronous coordination, use hooks instead.
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Namespace Events" icon="layer-group">
+    Prefix event names with your extension: `"myext:event"` to avoid collisions.
+  </Card>
+  <Card title="Document Events" icon="file-lines">
+    Document emitted events in your extension README so others can subscribe.
+  </Card>
+  <Card title="Keep Data Small" icon="feather">
+    Don't emit large payloads — they're held in memory. Emit IDs and let subscribers fetch details.
+  </Card>
+  <Card title="Fail Gracefully" icon="shield-check">
+    Don't assume other extensions are installed. Check for `undefined` data.
+  </Card>
+</CardGroup>
+
+## Debugging Events
+
+Log all events to trace cross-extension communication:
+
+```typescript
+if (process.env.DEBUG) {
+  // Subscribe to all custom events (pseudo-code pattern)
+  const originalOn = pi.on;
+  pi.on = (eventName: string, handler: any) => {
+    originalOn(eventName, (data, ctx) => {
+      console.log(`[Event] ${eventName}:`, data);
+      handler(data, ctx);
+    });
+  };
+}
+```
+
+## Limitations
+
+- **No guarantees**: Events are fire-and-forget. No delivery confirmation.
+- **No ordering**: If multiple extensions emit events, order is undefined.
+- **No async coordination**: Pi doesn't wait for event handlers to complete.
+
+For synchronous coordination, use hooks like `before_agent_start` that return values.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Hooks" icon="webhook" href="/api/hooks">
+    Core lifecycle hooks
+  </Card>
+  <Card title="ExtensionAPI" icon="puzzle-piece" href="/api/extension-api">
+    Register event handlers
+  </Card>
+</CardGroup>

@@ -1,0 +1,222 @@
+---
+title: Commands Overview
+description: Complete reference for all GSD commands and shortcuts
+icon: terminal
+---
+
+GSD provides a focused set of commands for managing your development workflow. Every command is accessible through slash commands in the interactive CLI.
+
+## Quick Reference
+
+<CardGroup cols={2}>
+  <Card title="/gsd" icon="play" href="/commands/step-mode">
+    Step through work one unit at a time
+  </Card>
+  <Card title="/gsd auto" icon="forward-fast" href="/commands/auto-mode">
+    Autonomous mode — walk away and let it build
+  </Card>
+  <Card title="/gsd discuss" icon="comments" href="/commands/discuss">
+    Capture decisions and resolve gray areas
+  </Card>
+  <Card title="/gsd status" icon="gauge" href="/commands/status-queue">
+    Progress dashboard and milestone queue
+  </Card>
+  <Card title="/gsd doctor" icon="stethoscope" href="/commands/doctor">
+    Validate and fix project integrity
+  </Card>
+  <Card title="/gsd migrate" icon="right-left" href="/commands/migrate">
+    Convert v1 projects to v2 format
+  </Card>
+  <Card title="/worktree" icon="code-branch" href="/commands/worktree">
+    Parallel development with git worktrees
+  </Card>
+  <Card title="/gsd prefs" icon="sliders" href="/commands/preferences">
+    Configure models, timeouts, and budgets
+  </Card>
+  <Card title="/voice" icon="microphone" href="/commands/voice">
+    Speech-to-text transcription (macOS)
+  </Card>
+</CardGroup>
+
+## Command Categories
+
+### Workflow Commands
+
+Core commands for executing work:
+
+| Command | Description | Mode |
+|---------|-------------|------|
+| `/gsd` | Step mode — advance one unit at a time | Interactive |
+| `/gsd next` | Explicit alias for step mode | Interactive |
+| `/gsd auto` | Autonomous mode — complete milestones without intervention | Automated |
+| `/gsd stop` | Stop auto mode gracefully | Control |
+
+### Planning & Discussion
+
+Commands for project planning and decision capture:
+
+| Command | Description | Use Case |
+|---------|-------------|----------|
+| `/gsd discuss` | Discuss architecture and capture decisions | Gray areas, design choices |
+| `/gsd queue` | Queue future milestones | Multi-milestone planning |
+
+### Monitoring & Management
+
+Commands for observability and control:
+
+| Command | Description | Output |
+|---------|-------------|--------|
+| `/gsd status` | Progress dashboard | Overlay UI |
+| `/gsd doctor` | Validate project integrity | Diagnostic report |
+| `/gsd prefs` | Manage preferences | Opens editor |
+
+### Migration & Setup
+
+One-time or setup commands:
+
+| Command | Description | When |
+|---------|-------------|------|
+| `/gsd migrate` | Convert v1 `.planning` to v2 `.gsd` | Legacy projects |
+| `/worktree <name>` | Create parallel development workspace | Feature branches |
+| `/voice` | Toggle speech-to-text | Hands-free mode |
+
+## Keyboard Shortcuts
+
+GSD registers global shortcuts for quick access:
+
+| Shortcut | Command | Description |
+|----------|---------|-------------|
+| `Ctrl+Alt+G` | `/gsd status` | Toggle dashboard overlay |
+| `Ctrl+Alt+V` | `/voice` | Toggle voice transcription |
+| `Escape` | — | Pause auto mode (preserves state) |
+
+## Command Workflow
+
+### Starting a New Project
+
+```bash
+gsd
+/gsd
+```
+
+With no `.gsd/` directory, GSD starts the **discussion flow** to capture your vision.
+
+### Executing Work
+
+**Step Mode** — Review each unit before proceeding:
+
+```bash
+/gsd next
+# Complete one unit → wizard shows what's next → advance manually
+```
+
+**Auto Mode** — Walk away and let it build:
+
+```bash
+/gsd auto
+# Research → Plan → Execute → Complete → Reassess → Repeat
+```
+
+### Steering During Auto Mode
+
+Run GSD in **two terminals** simultaneously:
+
+**Terminal 1 — Let it build:**
+```bash
+gsd
+/gsd auto
+```
+
+**Terminal 2 — Steer while it works:**
+```bash
+gsd
+/gsd discuss    # capture architectural decisions
+/gsd status     # check progress
+/gsd queue      # queue the next milestone
+```
+
+Both terminals read and write the same `.gsd/` files. Your decisions are picked up automatically at the next phase boundary.
+
+### Pausing and Resuming
+
+Press `Escape` during auto mode to pause without losing state:
+
+```bash
+# During auto mode:
+<Escape>  # Pauses, preserves context
+# Interact with the agent, inspect output, review files
+/gsd auto  # Resume from where it left off
+```
+
+## Command Completion
+
+All commands support tab completion:
+
+```bash
+/gsd <tab>        # Shows: next, auto, stop, status, queue, discuss, prefs, doctor, migrate
+/gsd prefs <tab>  # Shows: global, project, status
+/worktree <tab>   # Shows existing worktree names + subcommands
+```
+
+## Exit and Session Management
+
+| Command | Effect |
+|---------|--------|
+| `/exit` | Kill GSD process immediately |
+| `/clear` | Start a new session (alias: `/new`) |
+| `/reload` | Reload extensions after config changes |
+
+## Command Design Principles
+
+### One Command, Multiple Modes
+
+`/gsd` is the universal entry point. It adapts based on project state:
+
+- **No `.gsd/` directory** → Discussion flow
+- **Milestone exists, no roadmap** → Research or discuss
+- **Roadmap exists, slices pending** → Plan the next slice or execute a task
+- **Mid-task** → Resume from where you left off
+
+### Graceful Degradation
+
+All commands handle edge cases:
+
+- Running `/gsd status` with no milestones shows a helpful message
+- Running `/gsd auto` on a complete milestone stops gracefully
+- Running `/worktree merge` with no changes skips the merge
+
+### Safety First
+
+Destructive operations require confirmation:
+
+- `/worktree remove` confirms before deletion
+- `/gsd migrate` shows a preview before writing
+- `/gsd doctor fix` only fixes safe issues automatically
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="State Machine" icon="diagram-project" href="/concepts/state-machine">
+    How GSD determines what to do next
+  </Card>
+  <Card title="Workflow Phases" icon="list-check" href="/concepts/state-machine">
+    Research → Plan → Execute → Complete
+  </Card>
+  <Card title="Git Strategy" icon="code-branch" href="/concepts/git-strategy">
+    Branch-per-slice with squash merge
+  </Card>
+  <Card title="Cost Tracking" icon="coins" href="/guides/cost-tracking">
+    Token and cost accounting per unit
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Step Mode" icon="shoe-prints" href="/commands/step-mode">
+    Learn the interactive workflow
+  </Card>
+  <Card title="Auto Mode" icon="robot" href="/commands/auto-mode">
+    Master autonomous execution
+  </Card>
+</CardGroup>

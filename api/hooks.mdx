@@ -1,0 +1,320 @@
+---
+title: "Hooks"
+description: "Intercept and modify Pi's agent loop at critical lifecycle points"
+---
+
+## Overview
+
+Hooks let you inject logic at specific points in Pi's execution flow. Use them to:
+- Modify system prompts before they reach the LLM
+- Inject context from disk or external sources
+- Intercept tool calls and results
+- Save session data or emit metrics
+- Control compaction and session lifecycle
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  return { systemPrompt: `${event.systemPrompt}\n\nCustom instructions` };
+});
+```
+
+## Available Hooks
+
+### before_agent_start
+
+<ParamField path="before_agent_start" type="(event, ctx) => Promise<Partial<AgentStartConfig>>">
+  Fires **before** the LLM request is sent. Use to:
+  - Modify the system prompt
+  - Inject hidden messages (context injection)
+  - Add project-specific instructions
+
+  **Event Properties:**
+  - `prompt`: User's input message
+  - `systemPrompt`: Current system prompt
+
+  **Return Value:**
+  ```typescript
+  {
+    systemPrompt?: string,  // Modified system prompt
+    message?: {             // Hidden context message
+      customType: string,
+      content: string,
+      display: boolean
+    }
+  }
+  ```
+
+  **GSD Example** (`gsd/index.ts:220`):
+  ```typescript
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (!existsSync(join(process.cwd(), ".gsd"))) return;
+
+    const systemContent = loadPrompt("system");
+    const preferenceBlock = renderPreferencesForSystemPrompt(prefs);
+    const injection = await buildGuidedExecuteContextInjection(event.prompt);
+
+    return {
+      systemPrompt: `${event.systemPrompt}\n\n[SYSTEM CONTEXT — GSD]\n\n${systemContent}${preferenceBlock}`,
+      ...(injection ? {
+        message: {
+          customType: "gsd-guided-context",
+          content: injection,
+          display: false
+        }
+      } : {})
+    };
+  });
+  ```
+
+  <Tip>
+    Hidden messages (`display: false`) are sent to the LLM but don't appear in the user's chat history.
+  </Tip>
+</ParamField>
+
+### agent_end
+
+<ParamField path="agent_end" type="(event, ctx) => Promise<void>">
+  Fires **after** the agent completes a turn. Use to:
+  - Save activity logs
+  - Emit metrics
+  - Trigger auto-mode advancement
+  - Check for blockers or errors
+
+  **Event Properties:**
+  - `messages`: Array of all messages in the session
+  - `stopReason`: `"end_turn"` | `"aborted"` | `"max_tokens"` | etc.
+
+  **GSD Example** (`gsd/index.ts:289`):
+  ```typescript
+  pi.on("agent_end", async (event, ctx) => {
+    if (!isAutoActive()) return;
+
+    // If user pressed Escape, pause instead of advancing
+    const lastMsg = event.messages[event.messages.length - 1];
+    if (lastMsg?.stopReason === "aborted") {
+      await pauseAuto(ctx, pi);
+      return;
+    }
+
+    await handleAgentEnd(ctx, pi);
+  });
+  ```
+</ParamField>
+
+### session_start
+
+<ParamField path="session_start" type="(event, ctx) => Promise<void>">
+  Fires when a new conversation session begins. Use to:
+  - Display welcome messages
+  - Set up UI chrome (header, footer)
+  - Load extension state
+
+  **GSD Example** (`gsd/index.ts:160`):
+  ```typescript
+  pi.on("session_start", async (event, ctx) => {
+    const theme = ctx.ui.theme;
+    const logoText = GSD_LOGO_LINES.map(line => theme.fg("accent", line)).join("\n");
+    ctx.ui.setHeader((ui, theme) => new Text(logoText, 1, 0));
+  });
+  ```
+</ParamField>
+
+### session_before_compact
+
+<ParamField path="session_before_compact" type="(event, ctx) => Promise<{ cancel?: boolean }>">
+  Fires **before** Pi compacts the session to stay within context limits. Use to:
+  - Save continuation state to disk
+  - Block compaction during critical operations
+  - Preserve important context
+
+  **Return `{ cancel: true }`** to prevent compaction.
+
+  **GSD Example** (`gsd/index.ts:309`):
+  ```typescript
+  pi.on("session_before_compact", async (event, ctx) => {
+    // Block compaction during auto-mode
+    if (isAutoActive() || isAutoPaused()) {
+      return { cancel: true };
+    }
+
+    // Save continue.md if executing a task
+    const state = await deriveState(basePath);
+    if (state.phase === "executing" && state.activeTask) {
+      const continuePath = join(sliceDir, "continue.md");
+      await saveFile(continuePath, formatContinue(continueData));
+    }
+  });
+  ```
+
+  <Warning>
+    Blocking compaction can cause context window overflow. Only block temporarily.
+  </Warning>
+</ParamField>
+
+### session_shutdown
+
+<ParamField path="session_shutdown" type="(event, ctx) => Promise<void>">
+  Fires on Ctrl+C, SIGTERM, or process exit. Use to:
+  - Save state to disk
+  - Clean up resources
+  - Write crash recovery data
+
+  **GSD Example** (`gsd/index.ts:355`):
+  ```typescript
+  pi.on("session_shutdown", async (event, ctx) => {
+    if (!isAutoActive()) return;
+
+    // Save activity log before shutdown
+    const dash = getAutoDashboardData();
+    if (dash.currentUnit) {
+      saveActivityLog(ctx, dash.basePath, dash.currentUnit.type, dash.currentUnit.id);
+    }
+  });
+  ```
+</ParamField>
+
+### context (Advanced)
+
+<ParamField path="context" type="(event, ctx) => Promise<{ messages?: Message[] }>">
+  Fires **before** sending the full message array to the LLM. Use to:
+  - Filter messages from context
+  - Inject system-level context
+  - Transform message content
+
+  <Warning>
+    This is a low-level hook. Most extensions should use `before_agent_start` instead.
+  </Warning>
+</ParamField>
+
+### tool_call (Advanced)
+
+<ParamField path="tool_call" type="(event, ctx) => Promise<{ skip?: boolean, result?: ToolResult }>">
+  Intercept tool calls **before** they execute. Use to:
+  - Override tool execution
+  - Add logging/metrics
+  - Implement safety checks
+
+  **Return:**
+  - `{ skip: true, result: <synthetic> }` to bypass actual execution
+  - `{}` to proceed normally
+</ParamField>
+
+### tool_result (Advanced)
+
+<ParamField path="tool_result" type="(event, ctx) => Promise<{ result?: ToolResult }>">
+  Intercept tool results **after** execution. Use to:
+  - Transform tool output
+  - Add metadata
+  - Implement retry logic
+
+  **Return:**
+  - `{ result: <modified> }` to replace the result
+  - `{}` to pass through unmodified
+</ParamField>
+
+### input (Advanced)
+
+<ParamField path="input" type="(event, ctx) => Promise<{ content?: string }>">
+  Intercept user input **before** it's sent. Use to:
+  - Implement custom command routing
+  - Transform user prompts
+  - Add preprocessors
+
+  **Return:**
+  - `{ content: <modified> }` to replace input
+  - `{}` to pass through unmodified
+</ParamField>
+
+## Hook Execution Order
+
+```
+session_start
+  ↓
+User types message
+  ↓
+input                    (intercept user input)
+  ↓
+before_agent_start       (modify system prompt, inject context)
+  ↓
+context                  (transform full message array)
+  ↓
+LLM request sent
+  ↓
+tool_call               (intercept each tool call)
+  ↓
+tool_result             (intercept each tool result)
+  ↓
+agent_end               (session complete)
+  ↓
+session_before_compact  (before context window compaction)
+  ↓
+session_shutdown        (on exit)
+```
+
+## Common Patterns
+
+### Project-Specific System Prompt
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  const projectConfig = loadProjectConfig(process.cwd());
+  if (!projectConfig) return;
+
+  return {
+    systemPrompt: `${event.systemPrompt}\n\n${projectConfig.instructions}`
+  };
+});
+```
+
+### Auto-Mode Loop
+
+```typescript
+pi.on("agent_end", async (event, ctx) => {
+  if (!isAutoActive()) return;
+
+  // Derive next action from disk state
+  const state = await deriveState(basePath);
+  const nextUnit = determineNextUnit(state);
+
+  // Start fresh session for next unit
+  await ctx.newSession();
+  pi.sendMessage(
+    { customType: "auto-unit", content: nextUnit.prompt, display: false },
+    { triggerTurn: true }
+  );
+});
+```
+
+### Metrics Collection
+
+```typescript
+pi.on("agent_end", async (event, ctx) => {
+  let totalTokens = 0;
+  for (const entry of ctx.sessionManager.getEntries()) {
+    if (entry.type === "message" && entry.message.role === "assistant") {
+      const usage = entry.message.usage;
+      if (usage) totalTokens += (usage.input || 0) + (usage.output || 0);
+    }
+  }
+
+  saveMetrics({
+    sessionId: ctx.sessionId,
+    tokens: totalTokens,
+    duration: Date.now() - sessionStartTime
+  });
+});
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="ExtensionContext" icon="cube" href="/api/extension-context">
+    Access session state in hooks
+  </Card>
+  <Card title="Context Injection" icon="message-code" href="/api/context-injection">
+    Inject hidden context messages
+  </Card>
+  <Card title="Events" icon="bolt" href="/api/events">
+    Event system and inter-extension communication
+  </Card>
+</CardGroup>

@@ -1,0 +1,332 @@
+---
+title: Cost Tracking
+description: Understanding the cost dashboard, per-phase model selection, budget ceilings, and projections
+---
+
+## Overview
+
+GSD tracks every token and dollar spent during execution. The cost dashboard shows real-time breakdowns by phase, slice, model, and milestone.
+
+## The Cost Dashboard
+
+Press `Ctrl+Alt+G` or run:
+
+```bash
+/gsd status
+```
+
+The dashboard shows:
+
+<CardGroup cols={2}>
+  <Card title="Current Position" icon="map-pin">
+    - Active milestone, slice, and task
+    - Current phase (Research, Plan, Execute, Complete)
+    - Elapsed time in auto mode
+  </Card>
+  
+  <Card title="Cost Breakdown" icon="dollar-sign">
+    - Per-unit cost (task, slice, milestone)
+    - Token usage (input and output)
+    - Cost by model (Opus vs Sonnet)
+    - Running total for the milestone
+  </Card>
+  
+  <Card title="Projections" icon="chart-line">
+    - Estimated total cost based on completed work
+    - Average cost per task/slice
+    - Budget ceiling status
+  </Card>
+  
+  <Card title="Progress" icon="list-check">
+    - Completed units (tasks, slices)
+    - In-progress units
+    - Remaining work in the roadmap
+  </Card>
+</CardGroup>
+
+## Per-Phase Model Selection
+
+Use different models for different phases to optimize cost and quality.
+
+### Model Strategy
+
+- **Research** — Fast, cheap model (e.g., Sonnet, DeepSeek)
+- **Planning** — High-quality model (e.g., Opus, o1)
+- **Execution** — Balanced model (e.g., Sonnet)
+- **Completion** — Fast model (e.g., Sonnet, Haiku)
+
+### Configure in Preferences
+
+<Steps>
+  <Step title="Open preferences">
+    ```bash
+    /gsd prefs
+    ```
+  </Step>
+  
+  <Step title="Set models per phase">
+    ```yaml
+    ---
+    version: 1
+    models:
+      research: claude-sonnet-4-6
+      planning: claude-opus-4-6
+      execution: claude-sonnet-4-6
+      completion: claude-sonnet-4-6
+    ---
+    ```
+    
+    Use expensive models where quality matters (planning, complex execution) and cheaper models where speed matters (research, simple completions).
+  </Step>
+  
+  <Step title="Save and continue">
+    GSD picks up the new model selection at the next phase boundary. No need to restart.
+  </Step>
+</Steps>
+
+### Example: Cost-Optimized Setup
+
+```yaml
+models:
+  research: openrouter/deepseek/deepseek-r1  # $0.55/M tokens
+  planning: claude-opus-4-6                   # $15/M input, $75/M output
+  execution: claude-sonnet-4-6                # $3/M input, $15/M output
+  completion: claude-sonnet-4-6               # $3/M input, $15/M output
+```
+
+This setup uses DeepSeek for fast research, Opus for high-stakes planning, and Sonnet for execution.
+
+## Budget Ceilings
+
+Set a budget ceiling to auto-pause when spending reaches a limit.
+
+### Enable Budget Ceiling
+
+<Steps>
+  <Step title="Edit preferences">
+    ```bash
+    /gsd prefs
+    ```
+  </Step>
+  
+  <Step title="Set ceiling in USD">
+    ```yaml
+    budget_ceiling: 50.00
+    ```
+    
+    When the milestone's total cost reaches $50, auto mode pauses.
+  </Step>
+  
+  <Step title="Check status anytime">
+    ```bash
+    /gsd status
+    ```
+    
+    The dashboard shows how close you are to the ceiling.
+  </Step>
+</Steps>
+
+### What Happens When the Ceiling is Reached
+
+1. Auto mode completes the current task
+2. State is saved cleanly
+3. A message displays: "Budget ceiling reached ($50.00)"
+4. You can review progress and decide whether to continue
+
+### Resume After Ceiling
+
+<Steps>
+  <Step title="Review spending">
+    ```bash
+    /gsd status
+    ```
+    
+    Check the cost breakdown to see where tokens were spent.
+  </Step>
+  
+  <Step title="Adjust ceiling if needed">
+    ```bash
+    /gsd prefs
+    ```
+    
+    Increase the ceiling or remove it:
+    
+    ```yaml
+    budget_ceiling: 100.00  # or omit to disable
+    ```
+  </Step>
+  
+  <Step title="Resume auto mode">
+    ```bash
+    /gsd auto
+    ```
+  </Step>
+</Steps>
+
+## Cost Projections
+
+GSD estimates total milestone cost based on completed work.
+
+### How Projections Work
+
+- **After each task completes**, GSD calculates average cost per task
+- **Multiplies by remaining tasks** in the roadmap
+- **Adds completed cost** to estimate total
+
+### Example
+
+If you've completed 3 tasks at an average of $2.50 per task, and 7 tasks remain:
+
+```
+Completed: $7.50 (3 tasks)
+Remaining: $17.50 (7 tasks estimated)
+Projected total: $25.00
+```
+
+Projections improve as more work completes. Early projections are less accurate.
+
+## Cost Breakdown by Phase
+
+The dashboard shows how much each phase costs.
+
+<CardGroup cols={2}>
+  <Card title="Research Phase" icon="magnifying-glass">
+    Typically low cost — fast models, focused context
+    
+    **Optimization:** Use a cheap model (DeepSeek, Haiku)
+  </Card>
+  
+  <Card title="Planning Phase" icon="pen-ruler">
+    Higher cost — quality matters for good task decomposition
+    
+    **Optimization:** Use Opus or o1 for planning, accept higher cost
+  </Card>
+  
+  <Card title="Execution Phase" icon="code">
+    Moderate to high cost — depends on task complexity
+    
+    **Optimization:** Use Sonnet for most tasks, Opus for complex ones
+  </Card>
+  
+  <Card title="Completion Phase" icon="check">
+    Low cost — writing summaries and UAT scripts
+    
+    **Optimization:** Use Sonnet or Haiku
+  </Card>
+</CardGroup>
+
+## Model Costs (Reference)
+
+### Anthropic (Direct API)
+
+| Model | Input | Output |
+|-------|-------|--------|
+| Claude Opus 4 | $15/M | $75/M |
+| Claude Sonnet 4 | $3/M | $15/M |
+| Claude Haiku 4 | $0.25/M | $1.25/M |
+
+### OpenRouter
+
+| Model | Input | Output |
+|-------|-------|--------|
+| DeepSeek R1 | $0.55/M | $2.19/M |
+| Gemini 2.0 Flash | $0.075/M | $0.30/M |
+| Llama 3.3 70B | $0.35/M | $0.40/M |
+
+### OpenAI (Direct API)
+
+| Model | Input | Output |
+|-------|-------|--------|
+| GPT-4o | $2.50/M | $10/M |
+| o1 | $15/M | $60/M |
+| o1-mini | $3/M | $12/M |
+
+Prices change — check provider docs for current rates.
+
+## Using OpenRouter for Cost Control
+
+[OpenRouter](https://openrouter.ai) gives you access to hundreds of models through a single API key.
+
+<Steps>
+  <Step title="Sign up for OpenRouter">
+    Get an API key at [openrouter.ai](https://openrouter.ai)
+  </Step>
+  
+  <Step title="Log in to GSD with OpenRouter">
+    ```bash
+    /login
+    ```
+    
+    Select "Other provider (API key)" → "OpenRouter"
+  </Step>
+  
+  <Step title="Use OpenRouter models in preferences">
+    ```yaml
+    models:
+      research: openrouter/deepseek/deepseek-r1
+      planning: openrouter/anthropic/claude-opus-4
+      execution: openrouter/anthropic/claude-sonnet-4
+      completion: openrouter/google/gemini-2.0-flash
+    ```
+  </Step>
+</Steps>
+
+## Viewing Historical Costs
+
+Cost data is stored in `.gsd/cost-ledger.json` (internal format). The dashboard aggregates this data.
+
+To see historical costs:
+
+```bash
+/gsd status
+```
+
+Scroll through completed slices to see per-slice cost breakdowns.
+
+## Cost Optimization Tips
+
+<CardGroup cols={2}>
+  <Card title="Use cheap models for research" icon="lightbulb">
+    DeepSeek R1 or Gemini Flash work great for codebase scouting. Save Opus for planning.
+  </Card>
+  
+  <Card title="Set a budget ceiling" icon="shield">
+    Prevent runaway costs during overnight runs. Pause and review before continuing.
+  </Card>
+  
+  <Card title="Monitor projections" icon="chart-line">
+    If projected cost is higher than expected, switch to a cheaper execution model mid-milestone.
+  </Card>
+  
+  <Card title="Batch work into larger slices" icon="layer-group">
+    Fewer slices = fewer planning phases. Planning is expensive (Opus). Execution is cheaper (Sonnet).
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cost seems higher than expected">
+    Check the dashboard for phase breakdown:
+    
+    ```bash
+    /gsd status
+    ```
+    
+    Planning phases are expensive if using Opus. Consider using Sonnet for simpler planning.
+  </Accordion>
+  
+  <Accordion title="Budget ceiling not pausing auto mode">
+    The ceiling is checked between tasks. If a task is very long, the ceiling may be exceeded before the check. Adjust timeouts in preferences to catch this earlier.
+  </Accordion>
+  
+  <Accordion title="Projections wildly inaccurate">
+    Projections improve as more work completes. Early estimates (after 1-2 tasks) are rough. Wait until 3-4 tasks complete for better accuracy.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Model Selection](/guides/model-selection) — Choosing models per phase, OAuth vs API keys
+- [Long-Running Work](/guides/long-running-work) — Running auto mode overnight with budget ceilings
+- [Multi-Terminal Workflow](/guides/multi-terminal-workflow) — Monitoring progress while auto mode runs

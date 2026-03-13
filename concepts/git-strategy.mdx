@@ -1,0 +1,472 @@
+---
+title: "Git Strategy"
+description: "Branch-per-slice pattern, commit conventions, squash merge flow, and rollback strategies"
+---
+
+## Overview
+
+GSD uses a **branch-per-slice with squash merge** strategy. This keeps `main` clean and readable while preserving atomic per-task commits on feature branches.
+
+**Principle:** Main is always clean and working. Each slice gets an isolated branch. The user never runs a git command — the agent handles everything.
+
+## Branch-Per-Slice Pattern
+
+### Lifecycle
+
+1. **Slice starts** → create branch `gsd/M001/S01` from `main`
+2. **Per-task commits** on the branch — atomic, descriptive, bisectable
+3. **Slice completes** → squash merge to `main` as one clean commit
+4. **Branch deleted** — squash commit on `main` is the permanent record
+
+### Branch Naming Convention
+
+```
+gsd/M001/S01    # Slice 1 of Milestone 1
+gsd/M001/S02    # Slice 2 of Milestone 1
+gsd/M002/S01    # Slice 1 of Milestone 2
+gsd/M001/S01-fix  # Fix for slice 1 (if UAT fails after merge)
+```
+
+Format: `gsd/{milestoneId}/{sliceId}[-suffix]`
+
+## What `main` Looks Like
+
+After several slices complete:
+
+```bash
+$ git log --oneline main
+
+feat(M001/S04): workflow documentation and examples
+fix(M001/S03): bug fixes and doc corrections  
+feat(M001/S02): API endpoints and middleware
+feat(M001/S01): data model and type system
+feat(M001/S00): project initialization
+```
+
+**One commit per slice.** Each is:
+- Individually revertable
+- Reads like a changelog
+- Contains a complete, working feature
+
+### Squash Commit Message Format
+
+From the GSD-WORKFLOW.md:
+
+```
+feat(M001/S01): file I/O foundation
+
+Agent can parse, format, load, and save all GSD file types 
+with round-trip fidelity.
+
+Tasks completed:
+- T01: core types and interfaces
+- T02: markdown parser for plan files
+- T03: file writer with round-trip fidelity
+```
+
+**Structure:**
+- **Line 1:** `type(milestone/slice): title`
+- **Line 2:** Blank
+- **Line 3+:** Summary paragraph describing what the slice delivers
+- **Tasks section:** List of completed tasks
+
+### Commit Types
+
+| Type | Usage |
+|------|-------|
+| `feat` | New feature (most slices) |
+| `fix` | Bug fix (fix slices after UAT failures) |
+| `docs` | Documentation-only slice |
+| `refactor` | Code restructuring without new features |
+| `test` | Test additions/improvements |
+| `chore` | Build, config, or maintenance |
+
+## What the Branch Looks Like
+
+On `gsd/M001/S01` while the slice is in progress:
+
+```bash
+$ git log --oneline gsd/M001/S01
+
+test(S01): round-trip tests passing
+feat(S01/T03): file writer with round-trip fidelity
+chore(S01/T03): auto-commit after task
+feat(S01/T02): markdown parser for plan files
+chore(S01/T02): auto-commit after task
+feat(S01/T01): core types and interfaces
+chore(S01/T01): auto-commit after task
+```
+
+**Per-task commits.** Each is:
+- Atomic (one task's work)
+- Bisectable (if something breaks, you can binary search)
+- Auto-committed (agent doesn't manually commit)
+
+## Commit Conventions
+
+### When Commits Happen
+
+| Event | Commit Message | When It Happens |
+|-------|---------------|------------------|
+| **Task completion** | `chore(S01/T02): auto-commit after task` | After task verified, before summary written |
+| **Task verified** | `feat(S01/T02): <what was built>` | After summary written and verification passes |
+| **Plan/docs added** | `docs(S01): add slice plan` | When slice planning completes |
+| **Slice to main** | `feat(M001/S01): <slice title>` | When slice squash-merges to main |
+
+### Auto-Commit Format
+
+```
+chore(S01/T02): auto-commit after task
+```
+
+This is a **safety commit** — ensures work is saved even if the session crashes mid-task. The "real" commit comes after verification:
+
+```
+feat(S01/T02): login and signup endpoints with JWT integration
+```
+
+### Why Two Commits Per Task?
+
+1. **Auto-commit** protects against crashes — work is saved immediately after execution
+2. **Feature commit** represents verified work — only written after must-haves are confirmed
+
+If verification fails, you can roll back to the auto-commit and retry.
+
+## Squash Merge Flow
+
+When a slice completes:
+
+1. All tasks are marked `[x]` in `PLAN.md`
+2. Slice summary is written
+3. UAT script is written
+4. GSD runs: `git checkout main && git merge --squash gsd/M001/S01`
+5. GSD commits with structured message (see format above)
+6. GSD runs: `git branch -D gsd/M001/S01`
+7. Slice branch is gone, one clean commit on `main`
+
+### Why Squash Merge?
+
+<CardGroup cols={2}>
+  <Card title="Clean History" icon="timeline">
+    Main shows one commit per slice. Easy to read, easy to understand what shipped when.
+  </Card>
+  <Card title="Easy Rollback" icon="rotate-left">
+    `git revert <commit>` removes an entire slice cleanly. No need to identify which commits belong to the slice.
+  </Card>
+  <Card title="Bisectable Work" icon="magnifying-glass">
+    Each main commit is a working state. Git bisect to find which slice introduced a bug.
+  </Card>
+  <Card title="No Branch Clutter" icon="broom">
+    Slice branches are deleted after merge. No stale branches accumulating over time.
+  </Card>
+</CardGroup>
+
+### What About Task-Level History?
+
+Task summaries preserve the task-level details:
+
+- What each task built (`provides` in frontmatter)
+- What files were touched (`key_files`)
+- What decisions were made (`key_decisions`)
+- How long it took (`duration`)
+
+You don't need per-task commits on `main` — the summaries are richer than commit messages anyway.
+
+## Rollback Strategies
+
+### Problem: Bad Task (On Branch)
+
+**Scenario:** Task T03 broke something, but T01 and T02 are good.
+
+**Fix:**
+```bash
+git reset --hard HEAD~1  # Undo the last commit
+```
+
+This removes T03's commit from the branch. The task remains unmarked in `PLAN.md`, so GSD will re-execute it.
+
+### Problem: Bad Slice (On Main)
+
+**Scenario:** Slice S02 was merged to main, but UAT reveals it's broken.
+
+**Fix:**
+```bash
+git revert <commit-hash-of-S02>
+```
+
+This creates a new commit that undoes S02. Main stays working.
+
+**Better fix:** Create a fix slice:
+
+1. Create branch `gsd/M001/S02-fix`
+2. Write a mini-plan with fix tasks
+3. Execute fix tasks
+4. Squash merge to main as `fix(M001/S02): <what was fixed>`
+
+This preserves history and documents the fix.
+
+### Problem: UAT Failure After Merge
+
+**Scenario:** Slice S01 merged to main, UAT later reveals issues.
+
+**GSD's approach:**
+
+1. User reports UAT failure
+2. GSD creates `gsd/M001/S01-fix` branch from main
+3. Writes fix tasks in a mini-plan
+4. Executes fix tasks
+5. Squash merges fix to main as `fix(M001/S01): <fix>`
+
+The original S01 commit stays in history. The fix is a separate commit.
+
+### Problem: Entire Milestone Is Wrong
+
+**Scenario:** Milestone M001 took a wrong direction, need to undo all slices.
+
+**Fix:**
+
+```bash
+git log --oneline --grep="M001"  # Find all M001 commits
+git revert <commit1> <commit2> <commit3>  # Revert all
+```
+
+Or, if no other work has happened:
+
+```bash
+git reset --hard <commit-before-M001>
+```
+
+But be careful — this is destructive if others have pulled.
+
+## Working with Remotes
+
+### Pushing Slices (Optional)
+
+By default, GSD works entirely locally. But you can push slice branches:
+
+```bash
+git push -u origin gsd/M001/S01
+```
+
+Useful for:
+- Backing up work in progress
+- Collaborating on a slice
+- Triggering CI for the slice branch
+
+### Pushing Main
+
+After slices merge to main, push main:
+
+```bash
+git push origin main
+```
+
+Others see clean, squashed commits. They don't see the per-task history.
+
+### Pull Requests (Optional)
+
+If your workflow requires PR review before merging to main:
+
+1. Instead of squash-merging locally, push the slice branch
+2. Open a PR from `gsd/M001/S01` to `main`
+3. Reviewer sees per-task commits for detailed review
+4. Merge PR with "Squash and merge"
+5. Result: one commit on main, same as local squash merge
+
+## The Boundary Map and Git
+
+The boundary map (in `ROADMAP.md`) defines what each slice produces. This maps directly to git workflow:
+
+### Example Boundary Map
+
+```markdown
+## Boundary Map
+
+### S01 → S02
+Produces:
+  types.ts → User, Session, AuthToken (interfaces)
+  auth.ts  → generateToken(), verifyToken(), refreshToken()
+
+Consumes: nothing (leaf node)
+
+### S02 → S03  
+Produces:
+  api/auth/login.ts  → POST handler
+  api/auth/signup.ts → POST handler
+  middleware.ts       → authMiddleware()
+
+Consumes from S01:
+  auth.ts → generateToken(), verifyToken()
+```
+
+### How It Works with Git
+
+1. **S01 branch** (`gsd/M001/S01`):
+   - Creates `types.ts`, `auth.ts`
+   - Exports `generateToken()`, `verifyToken()`
+   - Squash merges to main
+
+2. **S02 branch** (`gsd/M001/S02`):
+   - Starts from main (includes S01's output)
+   - Imports from `auth.ts` (S01's exports)
+   - Creates `api/auth/login.ts`, `api/auth/signup.ts`, `middleware.ts`
+   - Squash merges to main
+
+3. **S03 branch** (`gsd/M001/S03`):
+   - Starts from main (includes S01 and S02's output)
+   - Imports from `auth.ts` and calls login/signup endpoints
+   - Builds on stable interfaces from prior slices
+
+Each slice branch starts from main, which contains all completed slices. Dependencies are guaranteed to be present.
+
+## Verification and Git
+
+The boundary map enables **deterministic verification** that slices connect:
+
+```bash
+# After S02 completes, verify it actually consumed S01's exports:
+
+$ grep "import.*generateToken" api/auth/login.ts
+import { generateToken } from '@/lib/auth';
+
+$ grep "import.*verifyToken" middleware.ts  
+import { verifyToken } from '@/lib/auth';
+```
+
+If the imports aren't there, the slice didn't fulfill its boundary map contract — verification fails.
+
+## Practical Example
+
+Here's a full milestone's git history:
+
+### During Development
+
+**Branch:** `gsd/M001/S01`
+```
+feat(S01/T03): session middleware with token validation
+chore(S01/T03): auto-commit after task
+feat(S01/T02): login and signup endpoints
+chore(S01/T02): auto-commit after task
+feat(S01/T01): JWT token helpers
+chore(S01/T01): auto-commit after task
+docs(S01): add slice plan
+```
+
+**Branch:** `gsd/M001/S02`
+```
+feat(S02/T03): error handling and user feedback
+chore(S02/T03): auto-commit after task
+feat(S02/T02): email confirmation flow
+chore(S02/T02): auto-commit after task
+feat(S02/T01): signup form with validation
+chore(S02/T01): auto-commit after task
+docs(S02): add slice plan
+```
+
+### After Squash Merge to Main
+
+**Branch:** `main`
+```
+feat(M001/S02): user registration UI
+feat(M001/S01): JWT authentication flow
+feat(M001/S00): project initialization
+```
+
+Clean, readable, one commit per slice.
+
+### If S01 Needs a Fix
+
+**Branch:** `gsd/M001/S01-fix`
+```
+feat(S01-fix/T01): fix token expiry validation
+chore(S01-fix/T01): auto-commit after task
+```
+
+**After fix merges:**
+
+**Branch:** `main`
+```
+fix(M001/S01): token expiry validation
+feat(M001/S02): user registration UI  
+feat(M001/S01): JWT authentication flow
+feat(M001/S00): project initialization
+```
+
+## Git Commands (Agent Runs These)
+
+You never run git commands manually. But here's what the agent does:
+
+### Starting a Slice
+
+```bash
+git checkout main
+git pull  # If working with remote
+git checkout -b gsd/M001/S01
+```
+
+### After Each Task
+
+```bash
+git add .
+git commit -m "chore(S01/T01): auto-commit after task"
+```
+
+After verification:
+
+```bash
+git add .
+git commit -m "feat(S01/T01): JWT token helpers"
+```
+
+### Completing a Slice
+
+```bash
+git checkout main
+git merge --squash gsd/M001/S01
+git commit -m "feat(M001/S01): JWT authentication flow
+
+Complete JWT auth system with login/signup endpoints and
+session middleware. Users can authenticate and access
+protected routes.
+
+Tasks completed:
+- T01: JWT token helpers
+- T02: Login and signup endpoints  
+- T03: Session middleware"
+git branch -D gsd/M001/S01
+```
+
+## Benefits Summary
+
+<AccordionGroup>
+  <Accordion title="Why one commit per slice on main?">
+    Makes history readable. Each commit is a complete feature. Easy to see what shipped and when. Easy to revert entire features.
+  </Accordion>
+
+  <Accordion title="Why keep per-task commits on branches?">
+    Atomic commits are bisectable. If something breaks during slice development, you can git bisect to find which task caused it.
+  </Accordion>
+
+  <Accordion title="Why delete branches after merge?">
+    Keeps repo clean. Slice history is preserved in task summaries (richer than commits anyway). Main commit is the permanent record.
+  </Accordion>
+
+  <Accordion title="Why auto-commit after each task?">
+    Protects against crashes. Even if session dies mid-verification, work is saved. Can resume from auto-commit.
+  </Accordion>
+
+  <Accordion title="Can I manually commit?">
+    You can, but GSD expects you not to. Auto mode handles all git operations. Manual commits might confuse the state machine.
+  </Accordion>
+</AccordionGroup>
+
+## Key Takeaway
+
+GSD's git strategy is fully automated:
+- **Branch per slice** keeps work isolated
+- **Per-task commits** on branches enable bisecting
+- **Squash merge to main** keeps history clean
+- **Delete branches** after merge prevents clutter
+- **Fix slices** for post-merge issues preserve history
+
+You focus on defining slices and tasks. GSD handles all git operations.

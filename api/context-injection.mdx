@@ -1,0 +1,328 @@
+---
+title: "Context Injection"
+description: "Inject context into LLM prompts without cluttering user chat history"
+---
+
+## Overview
+
+Context injection lets you send messages to the LLM that don't appear in the user's chat history. This is essential for:
+- Providing task-specific context from disk
+- Injecting project state or configuration
+- Sending guided execution instructions
+- Implementing auto-mode prompts
+
+Context messages are sent through the `before_agent_start` hook or via `pi.sendMessage()` with `display: false`.
+
+## Hidden Messages
+
+Messages with `display: false` are sent to the LLM but invisible to the user:
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  const guidedContext = await buildTaskContext();
+
+  return {
+    message: {
+      customType: "guided-execution",
+      content: guidedContext,
+      display: false  // Hidden from chat history
+    }
+  };
+});
+```
+
+<Note>
+  Hidden messages still consume context window tokens. Keep them focused and relevant.
+</Note>
+
+## GSD Guided Execute Pattern
+
+From `gsd/index.ts:367`:
+
+```typescript
+async function buildGuidedExecuteContextInjection(
+  prompt: string,
+  basePath: string
+): Promise<string | null> {
+  // Parse user prompt to determine task
+  const executeMatch = prompt.match(
+    /Execute the next task:\s+(T\d+)\s+\("([^"]+)"\)\s+in slice\s+(S\d+)\s+of milestone\s+(M\d+)/i
+  );
+  
+  if (!executeMatch) return null;
+
+  const [, taskId, taskTitle, sliceId, milestoneId] = executeMatch;
+  
+  // Load task plan from disk
+  const taskPlanPath = resolveTaskFile(basePath, milestoneId, sliceId, taskId, "PLAN");
+  const taskPlanContent = taskPlanPath ? await loadFile(taskPlanPath) : null;
+  
+  // Build comprehensive context
+  return [
+    "[GSD Guided Execute Context]",
+    "Use this injected context as startup context for guided task execution.",
+    "",
+    "## Inlined Task Plan",
+    taskPlanContent,
+    "",
+    "## Carry-Forward Context",
+    await buildPriorTaskSummaries(basePath, milestoneId, sliceId, taskId),
+    "",
+    "## Resume State",
+    await buildResumeSection(basePath, milestoneId, sliceId),
+  ].join("\n");
+}
+```
+
+This pattern:
+1. Detects specific user commands
+2. Reads relevant files from disk
+3. Inlines them as hidden context
+4. Returns early if not applicable
+
+## Context Message Structure
+
+<ParamField path="customType" type="string">
+  Semantic identifier for the message type:
+  - `"gsd-guided-context"` — GSD task execution context
+  - `"gsd-doctor-heal"` — Doctor auto-fix prompt
+  - `"auto-unit"` — Auto-mode unit prompt
+  
+  Use custom types to track message sources in logs.
+</ParamField>
+
+<ParamField path="content" type="string">
+  The actual context content sent to the LLM. Can include:
+  - Markdown-formatted instructions
+  - Inlined file contents
+  - Project state summaries
+  - Tool call history
+</ParamField>
+
+<ParamField path="display" type="boolean">
+  Set to `false` to hide from chat history:
+  ```typescript
+  {
+    customType: "task-context",
+    content: guidedPrompt,
+    display: false
+  }
+  ```
+</ParamField>
+
+## Message Visibility
+
+| Visibility | User Sees | LLM Sees | Use Case |
+|------------|-----------|----------|----------|
+| `display: true` | ✅ | ✅ | Normal user messages |
+| `display: false` | ❌ | ✅ | Context injection, guided prompts |
+| System Prompt | ❌ | ✅ | Global instructions, capabilities |
+
+## Programmatic Message Sending
+
+Send messages directly via `ExtensionAPI`:
+
+```typescript
+pi.sendMessage(
+  {
+    customType: "auto-next-task",
+    content: "Execute task T02: Configure Database",
+    display: false
+  },
+  { triggerTurn: true }  // Start agent immediately
+);
+```
+
+From `gsd/commands.ts:46`:
+
+```typescript
+function dispatchDoctorHeal(
+  pi: ExtensionAPI,
+  scope: string,
+  reportText: string,
+  structuredIssues: string
+): void {
+  const workflow = readFileSync(workflowPath, "utf-8");
+  const prompt = loadPrompt("doctor-heal", {
+    doctorSummary: reportText,
+    structuredIssues,
+    scopeLabel: scope
+  });
+
+  const content = `Read the following GSD workflow protocol and execute exactly.\n\n${workflow}\n\n## Your Task\n\n${prompt}`;
+
+  pi.sendMessage(
+    { customType: "gsd-doctor-heal", content, display: false },
+    { triggerTurn: true }
+  );
+}
+```
+
+## Context Injection Patterns
+
+### 1. Inline File Contents
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  if (!event.prompt.includes("/execute")) return;
+
+  const taskPlan = await loadFile("./tasks/current.md");
+  
+  return {
+    message: {
+      customType: "task-plan",
+      content: `[Task Plan]\n\n${taskPlan}`,
+      display: false
+    }
+  };
+});
+```
+
+### 2. Project State Summary
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  const state = await deriveProjectState();
+  
+  const summary = [
+    "[Project State]",
+    `Active milestone: ${state.activeMilestone}`,
+    `Current phase: ${state.phase}`,
+    `Blockers: ${state.blockers.length}`,
+  ].join("\n");
+
+  return {
+    message: {
+      customType: "project-state",
+      content: summary,
+      display: false
+    }
+  };
+});
+```
+
+### 3. Conditional Context
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  // Only inject if user is in a specific directory
+  if (!process.cwd().includes("my-project")) return;
+
+  const config = await loadProjectConfig();
+  
+  return {
+    systemPrompt: `${event.systemPrompt}\n\n${config.instructions}`,
+    message: {
+      customType: "project-config",
+      content: formatConfig(config),
+      display: false
+    }
+  };
+});
+```
+
+### 4. Fresh Session with Context
+
+Auto-mode pattern from `gsd/auto.ts:951`:
+
+```typescript
+async function dispatchNextUnit(ctx: ExtensionContext, pi: ExtensionAPI) {
+  // Determine next unit from state
+  const state = await deriveState(basePath);
+  const { unitType, unitId, prompt } = determineNextUnit(state);
+
+  // Start fresh session
+  await cmdCtx.newSession();
+
+  // Send focused prompt
+  pi.sendMessage(
+    {
+      customType: `auto-${unitType}`,
+      content: prompt,
+      display: false
+    },
+    { triggerTurn: true }
+  );
+}
+```
+
+## Context Budget Management
+
+Monitor context usage to avoid overflow:
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  const usage = ctx.getContextUsage();
+  
+  if (usage && usage.percent > 85) {
+    // Inject condensed context when near limit
+    return {
+      message: {
+        customType: "condensed-context",
+        content: buildCondensedContext(),
+        display: false
+      }
+    };
+  }
+
+  // Full context when space available
+  return {
+    message: {
+      customType: "full-context",
+      content: buildFullContext(),
+      display: false
+    }
+  };
+});
+```
+
+## Debugging Context Injection
+
+Add logging to track what's being injected:
+
+```typescript
+pi.on("before_agent_start", async (event, ctx) => {
+  const injection = await buildContext();
+  
+  if (process.env.DEBUG) {
+    console.log("[Context Injection]");
+    console.log(injection);
+  }
+
+  return {
+    message: {
+      customType: "debug-context",
+      content: injection,
+      display: false
+    }
+  };
+});
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Keep It Focused" icon="bullseye">
+    Only inject context relevant to the current task. The LLM will ignore noise.
+  </Card>
+  <Card title="Use Markdown" icon="file-lines">
+    Format context as markdown for better LLM comprehension.
+  </Card>
+  <Card title="Label Sections" icon="tags">
+    Use clear headers like `## Task Plan` or `## Project State`.
+  </Card>
+  <Card title="Monitor Tokens" icon="gauge">
+    Check `ctx.getContextUsage()` to avoid overflow.
+  </Card>
+</CardGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Hooks" icon="webhook" href="/api/hooks">
+    Lifecycle hooks for context injection
+  </Card>
+  <Card title="ExtensionContext" icon="cube" href="/api/extension-context">
+    Access session state
+  </Card>
+</CardGroup>

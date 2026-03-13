@@ -1,0 +1,414 @@
+---
+title: Skills
+description: How GSD discovers and applies domain-specific instruction bundles
+---
+
+Skills are domain-specific instruction bundles that extend agent capabilities beyond the base system prompt. They provide specialized workflows, references, and routing logic for specific problem domains.
+
+## What Are Skills?
+
+A skill is a directory containing:
+
+- **SKILL.md** — Main skill file with principles, routing, and intake
+- **workflows/** — Step-by-step procedures for common tasks
+- **references/** — Domain knowledge and decision frameworks
+
+Skills are discovered and loaded based on project context or explicit preferences.
+
+## Bundled Skills
+
+GSD ships with three skills in `~/.gsd/agent/skills/`:
+
+<CardGroup cols={3}>
+  <Card title="SwiftUI" icon="apple">
+    SwiftUI apps from scratch through App Store. Full lifecycle.
+  </Card>
+  <Card title="Frontend Design" icon="palette">
+    Component-driven UI development with design system thinking.
+  </Card>
+  <Card title="Debug Like Expert" icon="bug">
+    Systematic debugging: hypothesis testing, verification, investigation.
+  </Card>
+</CardGroup>
+
+## Skill Discovery Modes
+
+Set in preferences (`~/.gsd/preferences.md` or `.gsd/preferences.md`):
+
+```yaml
+---
+skill_discovery: suggest  # auto | suggest | off
+---
+```
+
+| Mode | Behavior |
+|------|----------|
+| **auto** | GSD detects relevant skills and loads them automatically during research phase |
+| **suggest** | GSD suggests skills but waits for user confirmation |
+| **off** | No automatic skill discovery (only `always_use_skills`) |
+
+**Default:** `suggest`
+
+## Always-Use Skills
+
+Force-load specific skills for every session:
+
+```yaml
+---
+always_use_skills:
+  - debug-like-expert
+  - swiftui
+---
+```
+
+Skills in this list are loaded regardless of `skill_discovery` mode.
+
+## Skill Rules
+
+Conditional skill routing based on project characteristics:
+
+```yaml
+---
+skill_rules:
+  - when:
+      file_patterns:
+        - "*.swift"
+        - "Package.swift"
+    use_skills:
+      - swiftui
+  - when:
+      file_patterns:
+        - "src/components/**/*.tsx"
+        - "tailwind.config.js"
+    use_skills:
+      - frontend-design
+---
+```
+
+**Rule evaluation:**
+- Checked during research phase
+- First matching rule wins
+- If no rules match, fallback to `skill_discovery` mode
+
+## Skill Structure
+
+A typical skill directory:
+
+```
+swiftui/
+  SKILL.md              # Main skill file
+  workflows/
+    build-new-app.md
+    debug-swiftui.md
+    add-feature.md
+    write-tests.md
+    optimize-performance.md
+    ship-app.md
+  references/
+    architecture.md
+    state-management.md
+    layout-system.md
+    navigation.md
+    animations.md
+    swiftdata.md
+    testing-debugging.md
+    performance.md
+```
+
+### SKILL.md Format
+
+```markdown
+---
+name: swiftui
+description: SwiftUI apps from scratch through App Store
+---
+
+<essential_principles>
+## How We Work
+
+[Core principles that define the skill's approach]
+</essential_principles>
+
+<intake>
+**What would you like to do?**
+
+1. Build a new SwiftUI app
+2. Debug an existing SwiftUI app
+...
+</intake>
+
+<routing>
+| Response | Workflow |
+|----------|----------|
+| 1, "new", "create" | `workflows/build-new-app.md` |
+| 2, "broken", "fix" | `workflows/debug-swiftui.md` |
+...
+</routing>
+
+<reference_index>
+## Domain Knowledge
+
+All in `references/`:
+- architecture.md - Patterns and structure
+- state-management.md - Data flow
+...
+</reference_index>
+```
+
+**Key sections:**
+- `<essential_principles>` — Core approach (loaded into system prompt)
+- `<intake>` — User-facing question to route to workflow
+- `<routing>` — Maps user responses to workflow files
+- `<reference_index>` — Quick navigation to domain references
+
+## How Skills Are Loaded
+
+```
+Research phase starts
+  ↓
+Check skill_rules
+  ↓
+Rules match? → Load matched skills
+  ↓
+No match? → Check skill_discovery mode
+  ↓
+auto mode? → Detect relevant skills from codebase
+  ↓
+suggest mode? → Detect + ask user confirmation
+  ↓
+off mode? → Skip detection
+  ↓
+Load always_use_skills
+  ↓
+Inject skill content into system prompt
+```
+
+## Skill Detection
+
+GSD detects skills by analyzing:
+
+1. **File patterns** — `*.swift`, `package.json`, `tailwind.config.js`
+2. **Directory structure** — `src/components/`, `Tests/`, `.xcodeproj`
+3. **Dependencies** — `Package.swift`, `package.json`, `requirements.txt`
+4. **Existing decisions** — `DECISIONS.md` mentions of frameworks
+
+**Detection runs once** during the research phase and saves a snapshot in `.gsd/M001-RESEARCH.md`.
+
+## New Skills Detection
+
+During auto mode, if the agent installs new skills (e.g., via skill discovery or manual installation), they're detected and injected into subsequent sessions:
+
+```xml
+<new_skills_installed>
+The following skills were installed during this milestone and are now available:
+
+- skill-name: Description
+
+Use these skills when relevant.
+</new_skills_installed>
+```
+
+## Custom Skills
+
+Create project-specific skills in `.gsd/skills/`:
+
+```bash
+# Create skill structure
+mkdir -p .gsd/skills/api-testing/{workflows,references}
+
+# Main skill file
+cat > .gsd/skills/api-testing/SKILL.md << 'EOF'
+---
+name: api-testing
+description: API endpoint testing with contract validation
+---
+
+<essential_principles>
+## How We Work
+
+1. Schema-first design (OpenAPI/JSON Schema)
+2. Contract tests before implementation
+3. Property-based testing for edge cases
+</essential_principles>
+
+<intake>
+**What would you like to do?**
+
+1. Write tests for existing endpoints
+2. Design and test new endpoints
+3. Debug failing API tests
+</intake>
+
+<routing>
+| Response | Workflow |
+|----------|----------|
+| 1, "test", "existing" | `workflows/test-existing.md` |
+| 2, "new", "design" | `workflows/design-and-test.md` |
+| 3, "debug", "fix" | `workflows/debug-tests.md` |
+</routing>
+EOF
+
+# Add workflow
+cat > .gsd/skills/api-testing/workflows/test-existing.md << 'EOF'
+# Testing Existing Endpoints
+
+1. Extract route handlers
+2. Generate schema from types
+3. Write contract tests
+4. Run tests, verify coverage
+EOF
+```
+
+**Make it discoverable:**
+
+```yaml
+# .gsd/preferences.md
+---
+skill_rules:
+  - when:
+      file_patterns:
+        - "src/api/**/*.ts"
+        - "openapi.yaml"
+    use_skills:
+      - api-testing
+---
+```
+
+Now any slice that touches `src/api/` will automatically load the skill.
+
+## Skill Content in System Prompt
+
+When a skill is loaded, its content is injected into the system prompt:
+
+```
+[Base GSD system prompt]
+
+<skill name="swiftui">
+[SKILL.md content]
+
+Available workflows:
+- workflows/build-new-app.md
+- workflows/debug-swiftui.md
+...
+
+Available references:
+- references/architecture.md
+- references/state-management.md
+...
+</skill>
+```
+
+The agent can reference workflow and reference files by name:
+
+```markdown
+"Read workflows/build-new-app.md and follow the steps"
+"Check references/state-management.md for @Observable patterns"
+```
+
+## Skill Best Practices
+
+### 1. Single Responsibility
+
+Each skill should cover one domain. Don't combine "testing" and "deployment" into one skill.
+
+**Good:**
+- `swiftui` — SwiftUI app development
+- `api-testing` — API endpoint testing
+
+**Bad:**
+- `backend` — Everything backend (too broad)
+
+### 2. Workflow-Driven
+
+Skills should provide actionable workflows, not just reference material. The agent should know what to do next.
+
+**Good:**
+```markdown
+## Workflow: Debug SwiftUI
+
+1. Reproduce the issue
+2. Check console logs
+3. Add breakpoint logging
+4. Verify state flow
+```
+
+**Bad:**
+```markdown
+## SwiftUI Debugging
+
+Debugging is hard. Here are some tips:
+- Use print statements
+- Check the docs
+```
+
+### 3. Verification-Focused
+
+Every workflow should include verification steps. The agent should know when it's done.
+
+**Good:**
+```markdown
+## Verification
+
+```bash
+xcodebuild test  # All tests pass
+open App.app     # App launches without crash
+```
+```
+
+**Bad:**
+```markdown
+## Done
+
+You should be good now.
+```
+
+### 4. Reference Separation
+
+Keep principles in SKILL.md, details in references/. The main skill file should be < 200 lines.
+
+**SKILL.md:**
+```markdown
+<essential_principles>
+- Declarative mindset
+- Single source of truth
+</essential_principles>
+
+<reference_index>
+For detailed patterns, see:
+- references/state-management.md
+- references/architecture.md
+</reference_index>
+```
+
+**references/state-management.md:**
+```markdown
+# State Management
+
+## @State vs @Observable
+
+[3000 words of detailed explanation]
+```
+
+## Debugging Skills
+
+**Check loaded skills:**
+```bash
+/gsd status
+```
+
+The dashboard shows active skills for the current session.
+
+**View skill content:**
+```bash
+cat ~/.gsd/agent/skills/swiftui/SKILL.md
+```
+
+**Test skill detection:**
+```yaml
+# .gsd/preferences.md
+---
+skill_discovery: auto
+---
+```
+
+Run `/gsd` and watch the research phase. GSD will log detected skills.

@@ -1,0 +1,278 @@
+---
+title: 'plan.md'
+description: 'Slice-level and task-level plan file formats'
+icon: 'clipboard-list'
+---
+
+## Overview
+
+There are **two types** of plan files in GSD:
+
+1. **Slice-level `plan.md`** — Lives at `.gsd/milestones/<MNN>/slices/<SNN>/plan.md`
+2. **Task-level `TNN-plan.md`** — Lives at `.gsd/milestones/<MNN>/slices/<SNN>/tasks/TNN-plan.md`
+
+<Info>
+Plans are written during the **Plan phase** and are the source of truth for task decomposition.
+</Info>
+
+## Slice-Level plan.md
+
+### Format
+
+```markdown
+# S01: Slice Title
+
+**Goal:** What this slice achieves.
+**Demo:** What the user can see/do when this is done.
+
+## Must-Haves
+- Observable outcome 1 (used for verification)
+- Observable outcome 2
+
+## Tasks
+
+- [ ] **T01: Task Title**
+  Description of what this task does.
+  
+- [ ] **T02: Another Task**
+  Description.
+
+## Files Likely Touched
+- path/to/file.ts
+- path/to/another.ts
+```
+
+### Fields
+
+<ParamField path="Goal" type="string" required>
+  One sentence describing what this slice achieves.
+</ParamField>
+
+<ParamField path="Demo" type="string" required>
+  What the user can see or do when this slice is complete. Should match the demo sentence from `roadmap.md`.
+</ParamField>
+
+<ParamField path="Must-Haves" type="list" required>
+  Observable outcomes used for slice verification. These should be demoable or testable.
+</ParamField>
+
+<ParamField path="Tasks" type="list" required>
+  Task checkboxes in format `- [ ] **T01: Title**` with description. Checkbox state tracks completion.
+</ParamField>
+
+<ParamField path="Files Likely Touched" type="list">
+  List of file paths that will likely be modified during this slice. Helps with planning.
+</ParamField>
+
+## Task-Level TNN-plan.md
+
+### Format
+
+```markdown
+# T01: Task Title
+
+**Slice:** S01
+**Milestone:** M001
+
+## Goal
+What this task accomplishes in one sentence.
+
+## Must-Haves
+
+### Truths
+Observable behaviors that must be true when this task is done:
+- "User can sign up with email and password"
+- "Login returns a JWT token"
+
+### Artifacts
+Files that must exist with real implementation (not stubs):
+- `src/lib/auth.ts` — JWT helpers (min 30 lines, exports: generateToken, verifyToken)
+- `src/app/api/auth/login/route.ts` — Login endpoint (exports: POST)
+
+### Key Links
+Critical wiring between artifacts:
+- `login/route.ts` → `auth.ts` via import of `generateToken`
+- `middleware.ts` → `auth.ts` via import of `verifyToken`
+
+## Steps
+1. First thing to do
+2. Second thing to do
+3. Third thing to do
+
+## Context
+- Relevant prior decisions or patterns to follow
+- Key files to read before starting
+```
+
+### Must-Haves Structure
+
+<Warning>
+**Must-haves are what make verification mechanically checkable.** They are the contract that defines "done."
+</Warning>
+
+<ParamField path="Truths" type="list" required>
+  Observable behaviors that must be true when this task is done. These are checked by running commands or reading output.
+  
+  Examples:
+  - "User can sign up with email and password"
+  - "Login returns a JWT token"
+  - "Tests pass"
+</ParamField>
+
+<ParamField path="Artifacts" type="list" required>
+  Files that must exist with **real implementation** (not stubs). Specify:
+  - File path
+  - Purpose
+  - Minimum line count or substantiveness criteria
+  - Required exports
+  
+  Examples:
+  - `src/lib/auth.ts` — JWT helpers (min 30 lines, exports: generateToken, verifyToken)
+  - `src/app/api/auth/login/route.ts` — Login endpoint (exports: POST)
+</ParamField>
+
+<ParamField path="Key Links" type="list" required>
+  Critical wiring between artifacts. These are checked by confirming imports/references actually connect the pieces.
+  
+  Format: `from_file → to_file via import/call of function_name`
+  
+  Examples:
+  - `login/route.ts` → `auth.ts` via import of `generateToken`
+  - `middleware.ts` → `auth.ts` via import of `verifyToken`
+</ParamField>
+
+### Other Fields
+
+<ParamField path="Goal" type="string" required>
+  One sentence describing what this task accomplishes.
+</ParamField>
+
+<ParamField path="Steps" type="list" required>
+  3-10 steps describing how to execute this task. These guide execution but are not verification criteria.
+</ParamField>
+
+<ParamField path="Context" type="list">
+  Additional context helpful for execution:
+  - Relevant prior decisions or patterns to follow
+  - Key files to read before starting
+  - Gotchas or things to watch out for
+</ParamField>
+
+## Planning Rules
+
+<CardGroup cols={2}>
+  <Card title="One Context Window" icon="window-maximize">
+    **The iron rule:** A task MUST fit in one context window. If it can't, it's two tasks.
+  </Card>
+  <Card title="Boundary Map Reference" icon="sitemap">
+    Must-haves should reference boundary map contracts from `roadmap.md`.
+  </Card>
+  <Card title="Read Dependencies" icon="link">
+    Read summaries from dependency slices (check `depends:[]` in roadmap) before planning.
+  </Card>
+  <Card title="Verify Upstream" icon="magnifying-glass">
+    Verify that upstream slices' actual outputs match what the boundary map says this slice consumes.
+  </Card>
+</CardGroup>
+
+## Update Semantics
+
+### Slice-level plan.md
+
+- **Written once** during slice planning phase
+- **Task checkboxes updated** as tasks complete: `- [ ]` → `- [x]`
+- **Immutable** after creation (except checkbox state)
+
+### Task-level TNN-plan.md
+
+- **Written once** during slice planning phase
+- **Never edited** after creation
+- **Read** at the start of task execution
+- **Used for verification** after task execution
+
+## Example Slice Plan
+
+```markdown
+# S01: Core Auth Primitives
+
+**Goal:** Implement JWT token generation, verification, and refresh rotation.
+**Demo:** Test harness can generate tokens, verify them, and rotate refresh tokens.
+
+## Must-Haves
+- JWT access tokens generate with correct payload
+- Token verification correctly validates signatures and expiration
+- Refresh token rotation works and invalidates old tokens
+- Test suite passes with 100% coverage
+
+## Tasks
+
+- [ ] **T01: JWT Token Generation**
+  Implement token creation with jose library, include payload encoding and signing.
+  
+- [ ] **T02: Token Verification**
+  Implement signature and expiration validation, error handling for invalid tokens.
+
+- [ ] **T03: Refresh Rotation**
+  Implement refresh token rotation with family tracking and invalidation.
+
+## Files Likely Touched
+- src/lib/auth.ts
+- src/types/auth.ts
+- src/lib/auth.test.ts
+```
+
+## Example Task Plan
+
+```markdown
+# T01: JWT Token Generation
+
+**Slice:** S01
+**Milestone:** M001
+
+## Goal
+Implement JWT access token generation using jose library with payload encoding and HS256 signing.
+
+## Must-Haves
+
+### Truths
+- Token generation returns valid JWT string
+- Token contains correct payload fields (sub, iat, exp)
+- Token signature validates with secret key
+- Test suite passes: generateToken.test.ts
+
+### Artifacts
+- `src/lib/auth.ts` — JWT generation (min 40 lines, exports: generateToken)
+- `src/types/auth.ts` — Type definitions (exports: TokenPair, JWTPayload)
+- `src/lib/auth.test.ts` — Unit tests (min 50 lines, 5+ test cases)
+
+### Key Links
+- `auth.test.ts` → `auth.ts` via import of `generateToken`
+- `auth.ts` → `jose` via import of `SignJWT`
+
+## Steps
+1. Install jose dependency and verify in package.json
+2. Create types/auth.ts with TokenPair and JWTPayload interfaces
+3. Implement generateToken() in lib/auth.ts using SignJWT
+4. Write unit tests covering success and error cases
+5. Run tests and verify 100% coverage of generateToken
+
+## Context
+- Use jose (not jsonwebtoken) per decision D001
+- Secret key should come from environment variable JWT_SECRET
+- Access tokens expire in 15 minutes (per roadmap)
+- Follow existing test patterns in lib/**/*.test.ts
+```
+
+## Related Files
+
+<CardGroup cols={3}>
+  <Card title="roadmap.md" href="/api/roadmap-md" icon="map">
+    Slice definitions and boundary map
+  </Card>
+  <Card title="summary.md" href="/api/summary-md" icon="file-lines">
+    Task and slice summaries
+  </Card>
+  <Card title="continue.md" href="/api/continue-md" icon="play">
+    Resume point for interrupted tasks
+  </Card>
+</CardGroup>

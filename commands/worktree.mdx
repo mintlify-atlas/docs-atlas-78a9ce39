@@ -1,0 +1,610 @@
+---
+title: Worktrees
+description: Parallel development with git worktrees
+icon: code-branch
+---
+
+GSD's worktree commands (`/worktree` or `/wt`) let you create **parallel development workspaces** for feature branches, experiments, or independent milestones.
+
+## Commands
+
+<ParamField path="/worktree <name>" type="command">
+  Create and switch into a new worktree (or `/wt <name>`)
+</ParamField>
+
+<ParamField path="/worktree list" type="command">
+  List all worktrees with paths and branches
+</ParamField>
+
+<ParamField path="/worktree switch <name>" type="command">
+  Switch into an existing worktree
+</ParamField>
+
+<ParamField path="/worktree return" type="command">
+  Switch back to the main project tree
+</ParamField>
+
+<ParamField path="/worktree merge [name] [target]" type="command">
+  Merge worktree back into target branch (auto-detects context)
+</ParamField>
+
+<ParamField path="/worktree remove <name>" type="command">
+  Remove a worktree and delete its branch
+</ParamField>
+
+<ParamField path="/worktree remove all" type="command">
+  Remove all worktrees (confirmation required)
+</ParamField>
+
+## What Are Worktrees?
+
+Git worktrees let you check out **multiple branches simultaneously** in separate directories. Unlike traditional branching (where you switch branches in one directory), worktrees give each branch its own directory.
+
+### Traditional Branching
+
+```bash
+git checkout feature-a  # Switch entire repo to feature-a
+# Work on feature-a
+git checkout main       # Switch back to main
+```
+
+**Downside:** Only one branch active at a time. Switching branches disrupts running processes.
+
+### Worktrees
+
+```bash
+/worktree feature-a    # Create new directory for feature-a
+# Work in feature-a worktree
+/worktree return       # Switch back to main tree
+```
+
+**Benefit:** Both branches exist simultaneously. No context switching.
+
+## GSD Worktree Layout
+
+GSD creates worktrees in `.gsd/worktrees/`:
+
+```
+my-project/
+  .gsd/
+    worktrees/
+      feature-a/        ← Worktree directory
+      refactor-auth/
+      experiment-123/
+  src/
+  package.json
+```
+
+Each worktree is a **full working directory** with its own:
+
+- Branch checkout
+- Working tree (files)
+- Index (staging area)
+
+But shares:
+
+- `.git/` history
+- Remote configuration
+
+## Create and Switch
+
+### Create a New Worktree
+
+```bash
+/worktree feature-a
+```
+
+**What happens:**
+
+1. Auto-commits any dirty files on current branch (with message `"wip: switching to feature-a"`)
+2. Creates branch `gsd/wt/feature-a` from current HEAD
+3. Creates directory `.gsd/worktrees/feature-a/`
+4. Checks out the branch in that directory
+5. Switches `process.cwd()` to the new worktree
+6. Updates footer to show new branch
+
+**Output:**
+
+```
+✓ Worktree feature-a created and activated.
+
+  path     .gsd/worktrees/feature-a
+  branch   gsd/wt/feature-a
+
+  Auto-committed on previous branch before switching.
+
+  /worktree merge feature-a  merge back when done
+  /worktree return           switch back to main tree
+```
+
+### Switch to Existing Worktree
+
+If the worktree already exists:
+
+```bash
+/worktree feature-a
+# or
+/worktree switch feature-a
+```
+
+**Effect:** Switches `process.cwd()` to the existing worktree (no new branch created).
+
+### Return to Main Tree
+
+```bash
+/worktree return
+```
+
+**Effect:**
+
+1. Auto-commits dirty files on worktree branch
+2. Switches `process.cwd()` back to main project root
+3. Updates footer to show main branch
+
+## List Worktrees
+
+```bash
+/worktree list
+```
+
+**Output:**
+
+```
+GSD Worktrees
+
+  feature-a  ● active
+    branch  gsd/wt/feature-a
+    path    /Users/you/projects/my-project/.gsd/worktrees/feature-a
+
+  refactor-auth
+    branch  gsd/wt/refactor-auth
+    path    /Users/you/projects/my-project/.gsd/worktrees/refactor-auth
+
+  main tree  /Users/you/projects/my-project
+```
+
+**Legend:**
+
+- **● active** — Currently in this worktree (`process.cwd()` is set to it)
+- **main tree** — The original project root
+
+## Merge Back
+
+### Deterministic Merge (Preferred)
+
+When merging a worktree back to main, GSD first tries a **deterministic squash merge**:
+
+```bash
+/worktree merge feature-a
+```
+
+**Flow:**
+
+1. Shows preview with file changes and line stats
+2. Confirms with user
+3. Switches to main branch
+4. Runs `git merge --squash gsd/wt/feature-a`
+5. Commits with message: `feat(feature-a): merge worktree feature-a`
+
+**Output:**
+
+```
+✓ Merged feature-a → main (deterministic squash)
+
+  12 files changed, +450 -120 lines
+  commit: feat(feature-a): merge worktree feature-a
+```
+
+### LLM-Guided Merge (Conflict Fallback)
+
+If the squash merge hits conflicts, GSD falls back to **LLM-guided conflict resolution**:
+
+**Flow:**
+
+1. Aborts the failed merge (cleans working tree)
+2. Gathers merge context:
+   - Full repo diff (code + GSD artifacts)
+   - Commit log from worktree branch
+   - File change summary (added, modified, removed)
+3. Dispatches to LLM with merge prompt
+4. LLM resolves conflicts and commits
+
+**Output:**
+
+```
+Deterministic merge hit conflicts — falling back to LLM-guided merge.
+
+✓ Merge helper started for feature-a (8 code + 4 GSD artifact changes)
+```
+
+### Auto-Detect Context
+
+When inside a worktree, you can run `/worktree merge` with no arguments:
+
+```bash
+/worktree feature-a         # Switch into feature-a worktree
+# Do work...
+/worktree merge             # Merges current worktree (feature-a) to main
+```
+
+GSD auto-detects the active worktree and merges it.
+
+### Specify Target Branch
+
+```bash
+/worktree merge feature-a dev
+```
+
+Merges `feature-a` into `dev` instead of `main`.
+
+## Remove Worktrees
+
+### Remove One
+
+```bash
+/worktree remove feature-a
+```
+
+**Confirmation:**
+
+```
+Remove worktree feature-a and delete branch gsd/wt/feature-a?
+
+  [Remove]  [Cancel]
+```
+
+**Effect:**
+
+1. Deletes `.gsd/worktrees/feature-a/` directory
+2. Deletes branch `gsd/wt/feature-a`
+3. If you were in that worktree, switches you back to main tree
+
+### Remove All
+
+```bash
+/worktree remove all
+```
+
+**Confirmation:**
+
+```
+Remove 3 worktrees and delete their branches?
+
+  • feature-a
+  • refactor-auth
+  • experiment-123
+
+  [Remove all]  [Cancel]
+```
+
+**Effect:** Deletes all worktrees and their branches.
+
+## Auto-Commit on Switch
+
+GSD **automatically commits dirty files** before switching worktrees or returning to main:
+
+**Example:**
+
+```bash
+# In main tree, with uncommitted changes
+/worktree feature-a
+```
+
+**Output:**
+
+```
+✓ Worktree feature-a created and activated.
+
+  path     .gsd/worktrees/feature-a
+  branch   gsd/wt/feature-a
+
+  Auto-committed on previous branch before switching.
+```
+
+**Commit message:**
+
+```
+wip(worktree-switch): switching to feature-a
+```
+
+This ensures:
+
+- No work is lost
+- Clean working tree before branching
+- Clear history of when switches happened
+
+## Worktree Lifecycle
+
+### 1. Create
+
+```bash
+/worktree feature-a
+```
+
+### 2. Work Inside
+
+```bash
+# Now in .gsd/worktrees/feature-a/
+/gsd auto
+# Build the feature...
+```
+
+### 3. Merge Back
+
+```bash
+/worktree merge
+# Squash-merges feature-a → main
+```
+
+### 4. Clean Up
+
+```bash
+/worktree remove feature-a
+```
+
+## Use Cases
+
+### Parallel Milestones
+
+Work on M002 while M001 is building:
+
+**Terminal 1 (main tree):**
+
+```bash
+gsd
+/gsd auto
+# Building M001...
+```
+
+**Terminal 2 (worktree):**
+
+```bash
+gsd
+/worktree m002-auth
+/gsd auto
+# Building M002 in parallel
+```
+
+Both milestones build **independently** with separate GSD state.
+
+### Experiments
+
+Try a risky refactor without disrupting main:
+
+```bash
+/worktree experiment-refactor
+# Refactor authentication system
+# If it works: /worktree merge
+# If it fails: /worktree remove experiment-refactor
+```
+
+### Feature Branches
+
+Classic feature branch workflow:
+
+```bash
+/worktree feature-webhooks
+# Implement webhook handling
+/worktree merge
+# Merge to main when done
+```
+
+### Long-Running Development
+
+Keep a stable main branch while working on a large feature:
+
+```bash
+/worktree big-feature
+# Work on big feature for weeks
+# Meanwhile, main branch stays clean for hotfixes
+```
+
+## Worktree + GSD State
+
+Each worktree has its **own `.gsd/` directory**:
+
+```
+main tree:
+  .gsd/
+    milestones/M001/  ← Main milestone
+
+feature-a worktree:
+  .gsd/
+    milestones/M002/  ← Independent milestone
+```
+
+This means:
+
+- Worktree can have different milestones than main
+- `/gsd status` shows different progress in each worktree
+- `/gsd auto` runs independently
+
+### Inherited State
+
+When you create a worktree, it **forks from current HEAD**, so it inherits:
+
+- `.gsd/` directory from main
+- All milestones, slices, and tasks
+- Completion state
+
+**You can choose:**
+
+```
+This worktree inherited existing GSD milestones from the main branch.
+
+  Continue — keep milestones and pick up where main left off
+  Start fresh — clear milestones so /gsd auto starts a new project
+
+  [Continue]  [Start fresh]
+```
+
+**Continue:** Work on the same milestones (useful for feature branches)
+
+**Start fresh:** Clear GSD state, start new milestones (useful for experiments)
+
+## Branch Naming
+
+GSD worktree branches follow the pattern:
+
+```
+gsd/wt/<name>
+```
+
+**Example:**
+
+```bash
+/worktree feature-a
+# Creates branch: gsd/wt/feature-a
+```
+
+This keeps worktree branches organized and separate from GSD's slice branches (`gsd/M001/S01`).
+
+## Merge Preview
+
+Before merging, GSD shows a detailed preview:
+
+```
+Merge feature-a → main
+
+  12 files changed, +450 -120 lines (8 code, 4 GSD)
+
+  Added:
+    + src/webhooks/receiver.ts +89 -0
+    + src/webhooks/signature.ts +67 -0
+    + .gsd/milestones/M001/slices/S04/S04-PLAN.md +45 -0
+
+  Modified:
+    ~ src/index.ts +23 -15
+    ~ src/config.ts +12 -8
+    ~ .gsd/M001-ROADMAP.md +18 -4
+
+  Removed:
+    - src/old-webhook.ts +0 -92
+
+  [Merge]  [Cancel]
+```
+
+**Fields:**
+
+- **Total changes** — Files, lines added/removed
+- **Breakdown** — Code vs GSD artifact changes
+- **File lists** — Added, modified, removed (first 10 each)
+
+## Shortcuts and Aliases
+
+`/wt` is an alias for `/worktree`:
+
+```bash
+/wt feature-a       # Same as /worktree feature-a
+/wt list            # Same as /worktree list
+/wt merge           # Same as /worktree merge
+```
+
+All commands work identically.
+
+## Tab Completion
+
+Worktree commands support tab completion:
+
+```bash
+/worktree <tab>           # Shows: list, merge, remove, switch, create, return
+/worktree switch <tab>    # Shows existing worktree names
+/worktree remove <tab>    # Shows existing worktree names + "all"
+```
+
+## Git Integration
+
+Under the hood, GSD uses `git worktree`:
+
+```bash
+# GSD runs:
+git worktree add .gsd/worktrees/feature-a -b gsd/wt/feature-a
+
+# When removing:
+git worktree remove .gsd/worktrees/feature-a
+git branch -D gsd/wt/feature-a
+```
+
+You can inspect worktrees with standard git commands:
+
+```bash
+git worktree list
+```
+
+**Output:**
+
+```
+/Users/you/projects/my-project                   a1b2c3d [main]
+/Users/you/projects/my-project/.gsd/worktrees/feature-a  d4e5f6g [gsd/wt/feature-a]
+```
+
+## Common Issues
+
+### Issue: "Already in a worktree"
+
+**Problem:** You're trying to create a worktree while already inside one.
+
+**Fix:**
+
+```bash
+/worktree return        # Go back to main tree first
+/worktree new-feature   # Then create new worktree
+```
+
+### Issue: "Worktree directory not empty"
+
+**Problem:** `.gsd/worktrees/<name>/` exists but is not a valid worktree.
+
+**Fix:**
+
+```bash
+rm -rf .gsd/worktrees/<name>
+git worktree prune
+/worktree <name>  # Recreate
+```
+
+### Issue: "Branch already exists"
+
+**Problem:** Branch `gsd/wt/<name>` exists from a previous worktree.
+
+**Fix:**
+
+```bash
+git branch -D gsd/wt/<name>
+/worktree <name>  # Recreate
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Merge Frequently" icon="code-merge">
+    Don't let worktrees diverge too far from main
+  </Card>
+  <Card title="Clean Up" icon="trash">
+    Remove worktrees after merging
+  </Card>
+  <Card title="Name Clearly" icon="tag">
+    Use descriptive names (feature-x, refactor-y)
+  </Card>
+  <Card title="Separate Concerns" icon="layer-group">
+    One feature per worktree
+  </Card>
+</CardGroup>
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Run auto mode in worktrees for parallel work
+  </Card>
+  <Card title="Status" icon="gauge" href="/commands/status-queue">
+    Check progress in each worktree independently
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Create a worktree for your next feature: `/worktree feature-name`
+2. Work inside it: `/gsd auto`
+3. Merge when done: `/worktree merge`
+4. Clean up: `/worktree remove feature-name`

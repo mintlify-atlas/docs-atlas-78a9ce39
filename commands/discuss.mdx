@@ -1,0 +1,449 @@
+---
+title: Discuss
+description: Capture architectural decisions and resolve gray areas during development
+icon: comments
+---
+
+`/gsd discuss` opens a **decision-capture flow** that runs alongside your main workflow. Use it to talk through architectural choices, identify gray areas, and write decisions to `CONTEXT.md` and `DECISIONS.md`.
+
+## Command
+
+<ParamField path="/gsd discuss" type="command">
+  Start a discussion session to capture architectural decisions
+</ParamField>
+
+## When to Use Discuss
+
+<CardGroup cols={2}>
+  <Card title="Gray Areas" icon="question">
+    Unclear architectural choices that need exploration
+  </Card>
+  <Card title="During Auto Mode" icon="robot">
+    Steer auto mode from a second terminal
+  </Card>
+  <Card title="Before Planning" icon="map">
+    Resolve design questions before slice planning
+  </Card>
+  <Card title="Mid-Execution" icon="wrench">
+    Capture decisions made during task execution
+  </Card>
+</CardGroup>
+
+## How It Works
+
+### Discussion Flow
+
+```
+┌─────────────────────────────────────┐
+│  Identify the decision to discuss     │
+│  (auth strategy, data model, etc.)    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Scout codebase for context           │
+│  (existing patterns, constraints)     │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Research options                     │
+│  (library docs, best practices)       │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Propose options with tradeoffs       │
+│  (3-4 viable approaches)              │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Capture your decision                │
+│  (write to CONTEXT.md, DECISIONS.md)  │
+└─────────────────────────────────────┘
+```
+
+### Discussion Scope
+
+- **Milestone-level** — If discussing before a milestone roadmap exists, writes to `.gsd/M00X-CONTEXT.md`
+- **Slice-level** — If discussing during a slice, appends to the active slice's context
+- **Project-level** — Big architectural decisions append to `.gsd/DECISIONS.md`
+
+## Typical Use Cases
+
+### 1. Gray Area Identification
+
+**Example:** Should we use JWT or session cookies for auth?
+
+```bash
+/gsd discuss
+```
+
+**GSD asks:**
+
+- What's the decision you're facing?
+- What options have you considered?
+- What are the constraints? (scalability, security, simplicity)
+
+**GSD researches:**
+
+- Checks existing codebase for auth patterns
+- Looks up library docs (e.g., `passport`, `jsonwebtoken`)
+- Searches for best practices
+
+**GSD proposes:**
+
+1. **JWT** — stateless, scalable, but harder to revoke
+2. **Session cookies** — simple, revocable, but needs shared storage
+3. **Hybrid** — short-lived JWT + refresh tokens in DB
+
+**You decide:**
+
+GSD writes the decision and rationale to `CONTEXT.md` and `DECISIONS.md`.
+
+### 2. Steering Auto Mode
+
+Run auto mode in one terminal, discuss in another:
+
+**Terminal 1:**
+
+```bash
+gsd
+/gsd auto
+```
+
+**Terminal 2:**
+
+```bash
+gsd
+/gsd discuss
+# "I want to change the webhook signature verification approach"
+```
+
+GSD writes your decision to disk. Auto mode picks it up at the next phase boundary (e.g., when planning the next slice).
+
+### 3. Before Planning
+
+Resolve design questions before slice planning:
+
+```bash
+/gsd
+# M001 roadmap exists, about to plan S01
+/gsd discuss
+# "How should we structure the payment provider abstraction?"
+```
+
+GSD captures the decision in `M001/S01-CONTEXT.md`. The slice plan incorporates it.
+
+### 4. Mid-Execution Decision Capture
+
+During task execution, the LLM might discover a gray area:
+
+```
+T02 execution:
+  "I need to decide: should webhook retries use exponential backoff or fixed delay?"
+```
+
+The LLM can invoke `discuss` internally to research and capture the decision before proceeding.
+
+## Discussion Philosophy
+
+### Gray Areas, Not Settled Choices
+
+Use `/gsd discuss` for **genuinely unclear decisions**, not for confirming settled approaches.
+
+**Good:**
+
+- "Should we cache at the API layer or the database layer?"
+- "Do we need a separate service for PDF generation, or can it run in-process?"
+- "Which OAuth provider should we integrate first?"
+
+**Not needed:**
+
+- "Use Express for the API server" (already standard in your stack)
+- "Store users in PostgreSQL" (no viable alternative)
+
+### Focused Investigation
+
+`/gsd discuss` does **mandatory research** before proposing options:
+
+1. **Scout the codebase** — What patterns already exist?
+2. **Check library docs** — What do current versions support?
+3. **Web search** — What are the current best practices?
+
+This prevents bikeshedding and anchors the discussion in facts.
+
+### Propose Options with Tradeoffs
+
+GSD presents **3-4 viable options** with honest tradeoffs:
+
+```
+Option 1: Server-side rendering (SSR)
+  + SEO-friendly, fast initial load
+  - More complex deployment, higher server cost
+
+Option 2: Client-side rendering (CSR) with prerendering
+  + Simple deployment, low server cost
+  - SEO requires prerender service, slower initial load
+
+Option 3: Static site generation (SSG)
+  + Fastest, cheapest, best SEO
+  - Requires rebuild on content changes, not suitable for dynamic data
+```
+
+You pick. GSD records it.
+
+## Output Artifacts
+
+### CONTEXT.md (Milestone or Slice)
+
+Captures decisions specific to a milestone or slice:
+
+```markdown
+# M001: Payment Integrations — Context
+
+## Architectural Decisions
+
+### Webhook Signature Verification (2026-03-13)
+
+**Decision:** Use HMAC SHA-256 with a per-provider secret.
+
+**Rationale:**
+- Stripe and PayPal both support HMAC
+- Simpler than asymmetric crypto (no key rotation)
+- Sufficient for webhook security given HTTPS transport
+
+**Alternatives considered:**
+- Ed25519 signatures (better security, but Stripe doesn't support it)
+- Shared secret with basic hash (rejected: too weak)
+
+**Depends on:**
+- Secrets stored in environment variables (not DB)
+- HTTPS enforced on webhook endpoint
+```
+
+### DECISIONS.md (Project)
+
+Append-only register of **all architectural decisions** across the project:
+
+```markdown
+# Architectural Decisions
+
+## 2026-03-13: Auth Strategy
+
+**Decision:** JWT with refresh tokens in PostgreSQL.
+
+**Context:** Need stateless auth for API scalability, but also revocability for security.
+
+**Tradeoffs:**
+- Access tokens: short-lived (15 min), JWT, stored nowhere
+- Refresh tokens: long-lived (7 days), opaque, stored in DB with expiry
+
+**Rejected:**
+- Pure session cookies (not stateless)
+- Pure JWT (can't revoke)
+
+---
+
+## 2026-03-12: Database Choice
+
+**Decision:** PostgreSQL for all persistent data.
+
+**Rationale:**
+- JSONB for flexible schema where needed
+- Full-text search built-in
+- Better query planner than MySQL
+
+**Rejected:**
+- MongoDB (no ACID, harder to query)
+- MySQL (weaker JSON support)
+```
+
+## Discussion During Different Phases
+
+### Pre-Planning (No Roadmap)
+
+`/gsd discuss` captures vision and constraints before creating a roadmap:
+
+```bash
+gsd
+/gsd discuss
+# "I want to build a multiplayer game with real-time sync"
+```
+
+**Output:** `.gsd/M001-CONTEXT.md` with design constraints, performance requirements, tech choices.
+
+### Planning Phase
+
+Discuss before or during slice planning:
+
+```bash
+/gsd
+# Roadmap exists, about to plan S01
+/gsd discuss
+# "Should S01 include both Stripe and PayPal, or just Stripe?"
+```
+
+**Output:** Appends to `.gsd/M001/S01-CONTEXT.md`.
+
+### Execution Phase
+
+Capture decisions mid-task:
+
+```bash
+/gsd auto  # Terminal 1
+/gsd discuss  # Terminal 2
+# "Change retry strategy to exponential backoff"
+```
+
+**Output:** Writes to `DECISIONS.md` and the active slice's `CONTEXT.md`.
+
+## Gray Area Detection
+
+The LLM can **detect gray areas** during execution and pause to discuss:
+
+**Example:**
+
+During `T02: Webhook receiver`, the LLM realizes:
+
+> "Webhook payloads can be up to 10MB. Should I stream them or buffer in memory?"
+
+The LLM:
+
+1. Invokes `discuss` internally
+2. Researches streaming vs buffering tradeoffs
+3. Proposes options
+4. Waits for user input (or uses prior context to decide)
+5. Captures the decision in `DECISIONS.md`
+
+## Freeform vs Structured
+
+GSD uses **structured questions** (`ask_user_questions`) for simple choices:
+
+```
+────────────────────────────────────────────
+💬 Which OAuth provider should we integrate first?
+
+  ◯ Stripe
+  ◯ PayPal
+  ◯ Square
+  ◯ Other
+
+────────────────────────────────────────────
+```
+
+But switches to **freeform** when you select "Other" or need to explain:
+
+```
+You selected "Other". Tell me more about the provider or approach you have in mind:
+
+> I want to use Plaid for bank account verification instead of card payments
+```
+
+GSD adapts based on how you communicate.
+
+## Anti-Patterns
+
+What `/gsd discuss` **does not do**:
+
+- **Checklist walking** — No generic "What are your success metrics?" questions
+- **Corporate speak** — No "stakeholder analysis" or "key performance indicators"
+- **Premature constraints** — Doesn't ask about deployment or tech stack before understanding the problem
+- **Shallow acceptance** — Won't accept vague answers without probing
+
+## Example Session
+
+```bash
+$ gsd
+/gsd discuss
+
+💬 What decision are you facing?
+
+> Should we use WebSockets or Server-Sent Events for real-time updates?
+
+Let me research the options...
+
+🔍 Checking codebase for existing real-time patterns...
+🔍 Looking up library docs (socket.io, ws, EventSource)...
+🔍 Searching for best practices...
+
+Here's what I found:
+
+**Option 1: WebSockets (socket.io)**
+  + Bidirectional communication (server can push, client can send)
+  + Widely supported, battle-tested library
+  - More complex than SSE (requires sticky sessions in load balancer)
+  - Overkill if you only need server → client push
+
+**Option 2: Server-Sent Events (SSE)**
+  + Simple, built into browsers (EventSource API)
+  + Works with standard HTTP (no protocol upgrade)
+  + Auto-reconnects on disconnect
+  - Unidirectional only (server → client)
+  - Requires separate endpoint for client → server messages
+
+**Option 3: WebSockets (native `ws`)**
+  + Lightweight, no framework overhead
+  + Full control over protocol
+  - No auto-reconnect, need to implement yourself
+  - No fallback to polling
+
+💬 Which approach fits your use case?
+
+  ◯ WebSockets (socket.io) — if you need bidirectional
+  ◯ Server-Sent Events — if server → client push is enough
+  ◯ Native WebSockets — if you want full control
+
+> Server-Sent Events — we only need server → client push
+
+✓ Decision captured.
+
+Written to:
+  .gsd/M001/S02-CONTEXT.md
+  .gsd/DECISIONS.md
+
+Next time you plan or execute, this decision will be included in the context.
+```
+
+## Discussion + Auto Mode
+
+The two-terminal workflow is powerful:
+
+**Terminal 1 (auto mode):**
+
+```bash
+gsd
+/gsd auto
+# Auto mode is planning S03: Notification system
+```
+
+**Terminal 2 (discuss):**
+
+```bash
+gsd
+/gsd discuss
+# "I want push notifications, not just email"
+```
+
+GSD writes the decision to `M001/S03-CONTEXT.md`. When auto mode reaches S03 planning, it incorporates the decision.
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Run autonomous mode while steering with discuss
+  </Card>
+  <Card title="Queue" icon="list" href="/commands/status-queue">
+    Queue future milestones with high-level decisions
+  </Card>
+  <Card title="Step Mode" icon="shoe-prints" href="/commands/step-mode">
+    Review decisions after each unit
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Use `/gsd discuss` to resolve gray areas **before** planning
+2. Run auto mode in one terminal, discuss in another
+3. Review `DECISIONS.md` after each milestone to see the history

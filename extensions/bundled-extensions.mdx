@@ -1,0 +1,283 @@
+---
+title: Bundled Extensions
+description: The 13 extensions that ship with GSD and what they provide
+---
+
+GSD bundles 13 extensions that load automatically on launch. These provide the core capabilities the workflow relies on.
+
+## Extension Reference
+
+<CardGroup cols={2}>
+  <Card title="GSD" icon="rocket">
+    Core workflow engine: `/gsd`, `/gsd auto`, state machine, dashboard, git strategy
+  </Card>
+  <Card title="Browser Tools" icon="browser">
+    Playwright-based browser automation for UI verification and testing
+  </Card>
+  <Card title="Search the Web" icon="magnifying-glass">
+    Web search via Brave, Tavily, or Jina page extraction
+  </Card>
+  <Card title="Google Search" icon="google">
+    Gemini-powered web search with AI-synthesized answers
+  </Card>
+  <Card title="Context7" icon="book">
+    Up-to-date library and framework documentation
+  </Card>
+  <Card title="Background Shell" icon="terminal">
+    Long-running process management with readiness detection
+  </Card>
+  <Card title="Subagent" icon="users">
+    Delegated tasks with isolated context windows
+  </Card>
+  <Card title="Mac Tools" icon="apple">
+    macOS native app automation via Accessibility APIs
+  </Card>
+  <Card title="MCPorter" icon="plug">
+    Lazy on-demand MCP server integration
+  </Card>
+  <Card title="Voice" icon="microphone">
+    Real-time speech-to-text transcription (macOS only)
+  </Card>
+  <Card title="Slash Commands" icon="code">
+    Custom command creation framework
+  </Card>
+  <Card title="Ask User Questions" icon="question">
+    Structured user input with single/multi-select
+  </Card>
+  <Card title="Secure Env Collect" icon="lock">
+    Masked secret collection without manual .env editing
+  </Card>
+</CardGroup>
+
+## GSD
+
+**What it provides:** The core workflow engine that powers step and auto mode.
+
+**Tools:** None (workflow orchestration is command-driven).
+
+**Commands:**
+- `/gsd` — Step mode wizard
+- `/gsd auto` — Autonomous mode
+- `/gsd stop` — Stop auto mode gracefully
+- `/gsd status` — Progress dashboard
+- `/gsd discuss` — Architecture discussion
+- `/gsd queue` — Queue future milestones
+- `/gsd prefs` — Model selection, timeouts, budget
+- `/gsd migrate` — Migrate v1 `.planning` to `.gsd`
+- `/gsd doctor` — Validate `.gsd/` integrity
+- `/worktree` (`/wt`) — Git worktree lifecycle
+- `/voice` — Toggle speech-to-text
+- `/exit` — Kill GSD process immediately
+
+**Hooks:**
+- `before_agent_start` — Inject GSD system context
+- `agent_end` — Auto-mode advancement
+- `session_before_compact` — Save continue.md or block
+- `session_shutdown` — Save activity log
+
+**Configuration:** None required. Preferences in `~/.gsd/preferences.md` or `.gsd/preferences.md`.
+
+## Browser Tools
+
+**What it provides:** Full browser automation for verifying UI work without human inspection.
+
+**Tools:**
+- `browser_navigate` — Navigate to a URL
+- `browser_click` — Click an element
+- `browser_type` — Type text into an input
+- `browser_get_accessibility_tree` — Get page structure
+- `browser_snapshot_refs` — Create stable element references
+- `browser_assert` — Verify page state
+- `browser_find` — Search page content
+- `browser_wait` — Wait for conditions
+- `browser_get_console_logs` — Get JS console output
+- `browser_get_network_logs` — Get network requests
+- `browser_close` — Close the browser
+
+**When to use it:** UI verification, end-to-end testing, behavioral debugging. The agent can interact with the app like a user would.
+
+**Key features:**
+- Headed mode (you can watch it work)
+- Accessibility-based interaction (resilient to UI changes)
+- Auto-handles dialogs (alert/confirm/prompt)
+- Screenshot capture on errors
+- Network and console log capture
+- HAR export for debugging
+
+**Configuration:** Optional `BROWSER_PATH` env var to use custom Chromium binary.
+
+## Search the Web
+
+**What it provides:** Rich web search with snippets, freshness filtering, domain scoping, and content extraction.
+
+**Tools:**
+- `search-the-web` — Brave Search with extra context
+- `fetch_page` — Extract clean markdown from any URL (Jina Reader)
+- `search_and_read` — Single-call search + content extraction (Brave LLM Context API)
+
+**When to use it:** Finding current documentation, researching libraries, checking API changes, verifying implementation patterns.
+
+**Key features:**
+- **Brave Search** — Extra snippets, freshness filtering (e.g., `past_year`), domain scoping
+- **Jina Reader** — Clean markdown extraction, CSS selector targeting, offset-based continuation
+- **Brave LLM Context** — Pre-extracted content with relevance scoring
+- **Native Anthropic search** — Built-in web search when using Anthropic models (no API key needed)
+
+**Configuration:**
+- `BRAVE_API_KEY` — Optional with Anthropic models, required otherwise. Get one at [brave.com/search/api](https://brave.com/search/api)
+- `JINA_API_KEY` — Optional (higher rate limits for page extraction)
+- `TAVILY_API_KEY` — Optional (alternative search provider)
+
+## Google Search
+
+**What it provides:** Gemini-powered web search with AI-synthesized answers and source citations.
+
+**Tools:**
+- `google_search` — Search using Gemini grounding
+
+**When to use it:** When you need synthesized answers instead of raw snippets. Gemini reads the search results and generates a coherent answer.
+
+**Configuration:** `GOOGLE_API_KEY` required. Get one at [ai.google.dev](https://ai.google.dev).
+
+## Context7
+
+**What it provides:** Up-to-date library and framework documentation.
+
+**Tools:**
+- `context7_search` — Search library docs
+
+**When to use it:** Checking current API signatures, verifying deprecated features, finding migration guides.
+
+**Configuration:** `CONTEXT7_API_KEY` required. Get one at [context7.com](https://context7.com).
+
+## Background Shell
+
+**What it provides:** Long-running process management with readiness detection.
+
+**Tools:**
+- `background_shell` — Start a long-running command
+- `background_shell_status` — Check process status
+- `background_shell_stop` — Stop a background process
+
+**When to use it:** Dev servers, watch modes, database containers — anything that needs to stay running while the agent works on other tasks.
+
+**Key features:**
+- Readiness detection (waits for "Server listening on..." before returning)
+- Output capture (stdout/stderr saved to files)
+- Process lifecycle management (start/stop/status)
+- Port collision detection
+
+**Configuration:** None required.
+
+## Subagent
+
+**What it provides:** Delegated tasks with isolated context windows.
+
+**Tools:**
+- `subagent` — Single agent invocation
+- `subagent` (parallel) — Multiple agents in parallel
+- `subagent` (chain) — Sequential pipeline with `{previous}` placeholder
+
+**Commands:**
+- `/subagent` — List available agents
+
+**When to use it:** Codebase reconnaissance, web research, parallel file processing — any task that benefits from a fresh context window.
+
+**Agent discovery:**
+- Bundled agents: `~/.gsd/agent/agents/` (scout, researcher, worker)
+- User agents: `~/.pi/agents/`
+- Project agents: `.gsd/agents/`
+
+**Configuration:** None required. See [Subagents](/extensions/subagents) for details.
+
+## Mac Tools
+
+**What it provides:** macOS native app automation via Accessibility APIs, NSWorkspace, and CGWindowList.
+
+**Tools:**
+- `mac_list_windows` — List all open windows
+- `mac_activate_window` — Bring a window to front
+- `mac_click_element` — Click UI elements by accessibility label
+- `mac_type_text` — Type text into focused element
+- `mac_get_ui_tree` — Get accessibility hierarchy
+- `mac_screenshot` — Capture window or screen
+
+**When to use it:** Automating macOS apps that don't have a web UI or API.
+
+**Configuration:** Requires Accessibility permissions. GSD will prompt on first use.
+
+**Platform:** macOS only.
+
+## MCPorter
+
+**What it provides:** Lazy on-demand MCP server integration.
+
+**Tools:**
+- `mcp_servers` — List available MCP servers
+- `mcp_discover` — Get tool signatures for a server
+- `mcp_call` — Call a tool on an MCP server
+
+**When to use it:** Accessing MCP servers configured in Claude Desktop, Cursor, VS Code, or standalone.
+
+**Key features:**
+- Lazy loading (zero token cost until used)
+- Discovery from all config sources (Claude Desktop, Cursor, VS Code, mcporter)
+- Cached server lists
+
+**Configuration:** Requires `mcporter` installed globally: `npm i -g mcporter`
+
+## Voice
+
+**What it provides:** Real-time speech-to-text transcription using macOS Speech framework.
+
+**Commands:**
+- `/voice` — Toggle voice mode
+- `Ctrl+Alt+V` — Keyboard shortcut
+
+**When to use it:** Hands-free interaction during long builds, pair programming, accessibility.
+
+**Key features:**
+- Real-time partial transcription
+- Accumulation across pauses
+- Direct editor integration
+
+**Configuration:** None required. Uses macOS Speech framework (requires macOS).
+
+**Platform:** macOS only.
+
+## Slash Commands
+
+**What it provides:** Framework for creating custom slash commands.
+
+**Commands:**
+- `/create-slash-command` — Create a new command
+- `/create-extension` — Create a new extension
+- `/audit` — List all registered commands
+
+**When to use it:** Building project-specific workflows, team shortcuts, custom automation.
+
+**Configuration:** None required.
+
+## Ask User Questions
+
+**What it provides:** Structured user input with single-select and multi-select options.
+
+**Tools:**
+- `ask_user` — Prompt for text/confirmation
+- `ask_user_choice` — Single-select from options
+- `ask_user_multi_choice` — Multi-select from options
+
+**When to use it:** Clarifying requirements, selecting from options, confirming destructive actions.
+
+**Configuration:** None required.
+
+## Secure Env Collect
+
+**What it provides:** Masked secret collection without manual .env editing.
+
+**Tools:**
+- `collect_env_secrets` — Prompt for secrets with masked input
+
+**When to use it:** Collecting API keys, tokens, passwords during setup without echoing to terminal or logs.
+
+**Configuration:** None required.

@@ -1,97 +1,95 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "GSD — Get Shit Done"
+description: "A powerful meta-prompting, context engineering and spec-driven development system that enables agents to work autonomously for extended periods"
 ---
 
-## Setting up
+<img
+  className="block dark:hidden"
+  src="https://media.brand.dev/5ffd6ce4-2434-4b4b-920a-f8cacac8b48b.svg"
+  alt="GSD Logo"
+/>
+<img
+  className="hidden dark:block"
+  src="https://media.brand.dev/5ffd6ce4-2434-4b4b-920a-f8cacac8b48b.svg"
+  alt="GSD Logo"
+/>
 
-Get your documentation site up and running in minutes.
+# Build software while you sleep
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+GSD is an autonomous coding agent that decomposes work into milestones, slices, and tasks — then executes them with fresh context windows, automatic git branching, crash recovery, and cost tracking. Type `/gsd auto`, walk away, and come back to built software with clean git history.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install GSD globally via npm and get started in seconds
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first autonomous build and see GSD in action
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts/milestones-slices-tasks">
+    Understand the milestone/slice/task hierarchy
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Commands" icon="terminal" href="/commands/overview">
+    Explore all GSD commands and workflows
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What makes GSD different
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Fresh context per task" icon="sparkles">
+    Every task runs in a clean 200k-token window with pre-loaded context. No accumulated garbage.
+  </Card>
+  <Card title="Autonomous mode" icon="robot">
+    `/gsd auto` runs research → plan → execute → verify → commit in a loop until the milestone is complete.
+  </Card>
+  <Card title="Branch-per-slice Git" icon="code-branch">
+    Each slice gets its own branch with atomic commits, squash-merged to main as one clean commit.
+  </Card>
+  <Card title="Crash recovery" icon="life-ring">
+    Lock files and session forensics let GSD resume exactly where it left off after any interruption.
+  </Card>
+  <Card title="Cost tracking" icon="dollar-sign">
+    Per-phase model selection with token/cost ledgers and budget ceilings to control spending.
+  </Card>
+  <Card title="Stuck detection" icon="shield-check">
+    Automatic retry with diagnostics when the agent produces unexpected output.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Key features
 
-## Need inspiration?
+<Steps>
+  <Step title="Milestone/Slice/Task hierarchy">
+    Work flows through demoable vertical slices, each decomposed into context-window-sized tasks with must-haves for verification.
+  </Step>
+  <Step title="State machine execution">
+    Discuss → Research → Plan → Execute → Complete → Reassess. Each phase produces durable artifacts on disk.
+  </Step>
+  <Step title="Context engineering">
+    Dispatch prompts include inlined task plans, prior summaries, dependency context, and decisions — no wasted tool calls on orientation.
+  </Step>
+  <Step title="13 bundled extensions">
+    Browser tools, web search, Context7 docs, background shell, subagents, voice transcription, and more.
+  </Step>
+  <Step title="Multi-terminal workflow">
+    Run auto mode in one terminal while steering from another. Both read the same `.gsd/` files.
+  </Step>
+</Steps>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## From prompt framework to agent application
+
+The original GSD was a collection of markdown prompts for Claude Code. It worked, but had hard limits: no context control, no real automation, no crash recovery, no observability.
+
+GSD v2 is a standalone CLI built on the Pi SDK with direct TypeScript access to the agent harness. That means GSD can **do** what v1 could only **ask** the LLM to do.
+
+<CardGroup cols={3}>
+  <Card title="Migrating from v1" icon="arrow-right" href="/guides/migrating-from-v1">
+    Convert `.planning` directories to `.gsd` format
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    How GSD embeds the Pi SDK and manages state
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/extensions/overview">
+    Extend GSD with custom tools and commands
+  </Card>
+</CardGroup>

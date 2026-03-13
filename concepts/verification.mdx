@@ -1,0 +1,610 @@
+---
+title: "Verification"
+description: "Must-haves, the verification ladder, anti-pattern detection, and mechanically checkable outcomes"
+---
+
+## The Problem
+
+How do you know when a task is actually done?
+
+Traditional approaches:
+- ❌ "I completed all the steps" (but did the steps produce the right outcome?)
+- ❌ "The code looks good" (but does it work?)
+- ❌ "I tested it manually" (can you prove it? can you repeat it?)
+
+GSD uses **mechanically checkable outcomes** — must-haves that can be verified by running concrete checks.
+
+## Must-Haves: The Verification Contract
+
+Every task defines **must-haves** — observable, verifiable criteria that must be true when the task is complete.
+
+From the GSD-WORKFLOW.md:
+
+> Must-haves are what make verification mechanically checkable. Truths are checked by running commands or reading output. Artifacts are checked by confirming files exist with real content. Key links are checked by confirming imports/references actually connect the pieces.
+
+### Three Types of Must-Haves
+
+<Tabs>
+  <Tab title="Truths">
+    **Observable behaviors** that must be true when done.
+    
+    Examples:
+    - "User can sign up with email and password"
+    - "Login returns a JWT token"
+    - "Tests pass for auth module"
+    - "Invalid tokens are rejected with 401"
+    - "API returns paginated results"
+    
+    **How to verify:**
+    - Run the feature and observe the outcome
+    - Execute a command and check the output
+    - Run tests and confirm they pass
+  </Tab>
+  
+  <Tab title="Artifacts">
+    **Files that must exist** with real implementation (not stubs).
+    
+    Examples:
+    - `src/lib/auth.ts` — JWT helpers (min 30 lines, exports: generateToken, verifyToken)
+    - `src/app/api/auth/login/route.ts` — Login endpoint (exports: POST)
+    - `tests/auth.test.ts` — Token lifecycle tests (min 5 test cases)
+    
+    **How to verify:**
+    - File exists at specified path
+    - File has minimum line count (prevents stub detection)
+    - File exports specified functions/types
+    - File contains substantive logic, not console.log
+  </Tab>
+  
+  <Tab title="Key Links">
+    **Critical wiring** between artifacts.
+    
+    Examples:
+    - `login/route.ts` → `auth.ts` via import of `generateToken`
+    - `middleware.ts` → `auth.ts` via import of `verifyToken`
+    - `dashboard.tsx` → `api/projects` via fetch call
+    
+    **How to verify:**
+    - Grep for import statements
+    - Grep for function calls
+    - Check that referenced modules export what's imported
+  </Tab>
+</Tabs>
+
+### Example: Task Must-Haves
+
+From the GSD-WORKFLOW.md:
+
+```markdown
+# T01: JWT Authentication Helpers
+
+## Must-Haves
+
+### Truths
+- User can generate a JWT token with a userId
+- Generated tokens can be verified to extract the userId
+- Invalid tokens are rejected properly
+- Expired tokens are rejected
+- Tests pass: `npm test -- auth.test.ts`
+
+### Artifacts
+- `src/lib/auth.ts` — JWT helpers (min 30 lines)
+  - Exports: generateToken(userId), verifyToken(token)
+  - Uses jose library for JWT handling
+  - Reads JWT_SECRET from environment
+  
+- `tests/auth.test.ts` — Token tests (min 5 test cases)
+  - Test: token generation returns a string
+  - Test: token verification returns correct userId
+  - Test: invalid signature is rejected
+  - Test: expired token is rejected
+  - Test: missing secret throws error
+
+### Key Links
+- `auth.ts` imports `SignJWT` and `jwtVerify` from `jose`
+- `auth.ts` imports `JWT_SECRET` from `@/lib/env`
+```
+
+## The Verification Ladder
+
+Use the **strongest verification tier you can reach**. Always prefer automated verification over human judgment.
+
+<Steps>
+  <Step title="Tier 1: Static Verification">
+    **What it checks:** Files exist, exports present, wiring connected, not stubs.
+    
+    **How to run:**
+    ```bash
+    # Check file exists
+    ls src/lib/auth.ts
+    
+    # Check exports
+    grep "export.*generateToken" src/lib/auth.ts
+    
+    # Check imports (key links)
+    grep "import.*generateToken" src/app/api/auth/login/route.ts
+    
+    # Check not a stub (min line count)
+    wc -l src/lib/auth.ts  # Should be >= 30
+    ```
+    
+    **When to use:** Always. This is the baseline.
+  </Step>
+  
+  <Step title="Tier 2: Command Verification">
+    **What it checks:** Tests pass, build succeeds, lint clean, command works.
+    
+    **How to run:**
+    ```bash
+    # Run tests
+    npm test -- auth.test.ts
+    
+    # Run type checker
+    npm run type-check
+    
+    # Run linter
+    npm run lint
+    
+    # Run build
+    npm run build
+    ```
+    
+    **When to use:** When tests exist or commands validate behavior.
+  </Step>
+  
+  <Step title="Tier 3: Behavioral Verification">
+    **What it checks:** Browser flows work, API responses correct, end-to-end behavior.
+    
+    **How to run:**
+    ```bash
+    # Start dev server
+    npm run dev
+    
+    # Test API endpoint
+    curl -X POST http://localhost:3000/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"email":"test@example.com","password":"password"}'
+    
+    # Use browser automation
+    # (GSD has browser tools for this)
+    ```
+    
+    **When to use:** For UI features, API endpoints, or runtime behavior that tests don't cover.
+  </Step>
+  
+  <Step title="Tier 4: Human Verification">
+    **What it checks:** Subjective qualities, visual design, UX flows.
+    
+    **How to run:** UAT script (written at slice completion).
+    
+    **When to use:** Only when you genuinely can't verify yourself. Most things should use Tiers 1-3.
+  </Step>
+</Steps>
+
+### The Rule
+
+> "All steps done" is NOT verification. Check the actual outcomes.
+
+From the GSD-WORKFLOW.md:
+
+> **Verification ladder — use the strongest tier you can reach:**
+> 1. **Static:** Files exist, exports present, wiring connected, not stubs.
+> 2. **Command:** Tests pass, build succeeds, lint clean, blocked command works.
+> 3. **Behavioral:** Browser flows work, API responses correct.
+> 4. **Human:** Ask the user only when you genuinely can't verify yourself.
+
+## Verification Report Format
+
+When verification completes, GSD generates a structured report:
+
+```markdown
+### Observable Truths
+| # | Truth | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | User can sign up | ✓ PASS | POST /api/auth/signup returns 201 with token |
+| 2 | Login returns JWT | ✓ PASS | POST /api/auth/login returns token, verified valid |
+| 3 | Invalid credentials rejected | ✓ PASS | Wrong password returns 401 |
+| 4 | Tests pass | ✓ PASS | npm test -- auth.test.ts (8 passed) |
+
+### Artifacts  
+| File | Expected | Status | Evidence |
+|------|----------|--------|----------|
+| src/lib/auth.ts | JWT helpers, min 30 lines | ✓ SUBSTANTIVE | 87 lines, exports generateToken, verifyToken |
+| tests/auth.test.ts | Token tests, min 5 cases | ✓ SUBSTANTIVE | 8 test cases, all passing |
+| src/app/api/auth/login/route.ts | Login endpoint | ✓ SUBSTANTIVE | 45 lines, exports POST handler |
+
+### Key Links
+| From | To | Via | Status |
+|------|----|----|--------|
+| login/route.ts | auth.ts | import generateToken | ✓ WIRED |
+| middleware.ts | auth.ts | import verifyToken | ✓ WIRED |
+| auth.ts | jose | import SignJWT, jwtVerify | ✓ WIRED |
+
+### Anti-Patterns Found
+None. Implementation is substantive.
+```
+
+### Status Values
+
+<CardGroup cols={2}>
+  <Card title="✓ PASS" icon="check" color="green">
+    Truth is verified. Behavior works as expected.
+  </Card>
+  <Card title="✗ FAIL" icon="xmark" color="red">
+    Truth is NOT verified. Behavior doesn't work.
+  </Card>
+  <Card title="✓ SUBSTANTIVE" icon="check-circle" color="green">
+    Artifact exists with real implementation (not a stub).
+  </Card>
+  <Card title="✗ STUB" icon="ban" color="red">
+    Artifact exists but is a stub (console.log, TODO, empty function).
+  </Card>
+  <Card title="✓ WIRED" icon="link" color="green">
+    Key link verified. Import/call exists and resolves.
+  </Card>
+  <Card title="✗ NOT WIRED" icon="link-slash" color="red">
+    Key link missing. Import/call doesn't exist.
+  </Card>
+</CardGroup>
+
+## Anti-Pattern Detection
+
+GSD checks for common anti-patterns during verification:
+
+### Stub Detection
+
+A file is a stub if:
+- Has fewer lines than expected
+- Contains only `console.log()` statements
+- Has `TODO` or `FIXME` comments
+- Has empty functions (`return null`, `throw new Error('Not implemented')`)
+
+**Example:**
+
+```typescript
+// ✗ STUB (8 lines, console.log instead of real implementation)
+export async function sendEmail(to: string, subject: string, body: string) {
+  console.log(`Sending email to ${to}: ${subject}`);
+  console.log(body);
+  return true;
+}
+```
+
+```typescript
+// ✓ SUBSTANTIVE (real implementation)
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function sendEmail(to: string, subject: string, body: string) {
+  const result = await resend.emails.send({
+    from: 'noreply@example.com',
+    to,
+    subject,
+    html: body,
+  });
+  
+  if (result.error) {
+    throw new Error(`Email send failed: ${result.error.message}`);
+  }
+  
+  return result.data.id;
+}
+```
+
+### Hardcoded Response Detection
+
+An API endpoint is hardcoded if:
+- Returns the same response regardless of input
+- Doesn't read from a database, file, or external service
+- Doesn't validate inputs
+
+**Example:**
+
+```typescript
+// ✗ HARDCODED (always returns success)
+export async function POST(request: Request) {
+  return Response.json({ success: true, token: 'abc123' });
+}
+```
+
+```typescript
+// ✓ REAL IMPLEMENTATION
+export async function POST(request: Request) {
+  const { email, password } = await request.json();
+  
+  const user = await db.users.findUnique({ where: { email } });
+  if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+    return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+  
+  const token = await generateToken(user.id);
+  return Response.json({ success: true, token, user });
+}
+```
+
+### Missing Error Handling
+
+Code lacks error handling if:
+- No try/catch around async operations
+- No validation of required inputs
+- No checks for null/undefined
+
+**Example:**
+
+```typescript
+// ✗ MISSING ERROR HANDLING
+export async function getUser(id: string) {
+  const user = await db.users.findUnique({ where: { id } });
+  return user.email; // crashes if user is null
+}
+```
+
+```typescript
+// ✓ PROPER ERROR HANDLING
+export async function getUser(id: string) {
+  if (!id) {
+    throw new Error('User ID is required');
+  }
+  
+  const user = await db.users.findUnique({ where: { id } });
+  if (!user) {
+    throw new Error(`User not found: ${id}`);
+  }
+  
+  return user.email;
+}
+```
+
+## Slice-Level Verification
+
+Slices have their own verification section in `PLAN.md`:
+
+```markdown
+## Verification
+
+**Tests:**
+- `npm test -- auth.test.ts` — Token generation and verification
+- `npm test -- api/auth/login.test.ts` — Login endpoint
+- `npm test -- api/auth/signup.test.ts` — Signup endpoint
+
+**Manual verification:**
+- POST to /api/auth/signup with email/password → returns 201 with token
+- POST to /api/auth/login with valid credentials → returns 200 with token
+- POST to /api/auth/login with invalid credentials → returns 401
+- Access protected route with valid token → 200
+- Access protected route without token → 401
+
+**Success criteria:**
+- All tests pass
+- End-to-end signup → login → protected route flow works
+- Boundary map contracts fulfilled (exports generateToken, verifyToken)
+```
+
+### Per-Task Verification
+
+Each task checks its own must-haves. If it's not the final task, some slice-level checks may not pass yet — that's expected.
+
+**Example:**
+
+Slice S01 has 3 tasks. Slice verification includes "end-to-end login flow works."
+
+- **After T01 (token helpers):** End-to-end flow doesn't work yet (no endpoints). That's fine.
+- **After T02 (endpoints):** End-to-end flow might partially work, but middleware missing. Note which checks pass.
+- **After T03 (middleware):** ALL slice-level checks must pass.
+
+### Final Task Verification
+
+The final task in a slice MUST verify all slice-level checks pass before marking done.
+
+From the `execute-task.md` prompt:
+
+> Run the slice-level verification checks defined in the slice plan's Verification section. Track which pass. On the final task of the slice, all must pass before marking done. On intermediate tasks, partial passes are expected — note which ones pass in the summary.
+
+## UAT: User Acceptance Testing
+
+When a slice completes, GSD writes a `UAT.md` file — a **non-blocking human test script**.
+
+### Format
+
+```markdown
+# S01: JWT Authentication Flow — UAT
+
+**Generated:** 2026-03-07
+**Slice:** S01
+**Milestone:** M001
+
+## Automated Verification Results
+
+✅ All tests pass (12/12)
+✅ End-to-end flow verified via browser automation
+✅ Boundary map contracts fulfilled
+
+## Human Test Script
+
+The agent verified automated checks. Test these scenarios manually
+if you want to validate UX or edge cases:
+
+### Scenario 1: Happy Path Signup
+1. Navigate to /signup
+2. Enter email: test@example.com, password: Test123!
+3. Click "Sign Up"
+4. **Expected:** Redirected to dashboard, see welcome message
+
+### Scenario 2: Login with Valid Credentials
+1. Navigate to /login
+2. Enter email: test@example.com, password: Test123!
+3. Click "Log In"
+4. **Expected:** Redirected to dashboard, see project list
+
+### Scenario 3: Login with Invalid Credentials  
+1. Navigate to /login
+2. Enter email: test@example.com, password: WrongPassword
+3. Click "Log In"
+4. **Expected:** Error message "Invalid credentials", stay on login page
+
+### Scenario 4: Protected Route Without Token
+1. Navigate to /dashboard (without logging in)
+2. **Expected:** Redirected to /login
+
+## Failure Handling
+
+If any scenario fails:
+1. Report the failure in the GSD session
+2. GSD will create fix tasks in the current or a new slice
+3. Fixes will be squash-merged to main as `fix(M001/S01): <issue>`
+```
+
+### Key Points
+
+<CardGroup cols={2}>
+  <Card title="Non-Blocking" icon="play">
+    GSD doesn't wait for UAT results. It writes the script and moves to the next slice.
+  </Card>
+  <Card title="User Tests When Convenient" icon="clock">
+    Run UAT whenever you have time. Report failures later, GSD creates fix slices.
+  </Card>
+  <Card title="Automated Checks Already Done" icon="robot">
+    UAT focuses on subjective UX and edge cases. Automated verification already passed.
+  </Card>
+  <Card title="Failure Creates Fix Tasks" icon="wrench">
+    If UAT fails, report it. GSD creates a fix slice with tasks to address the issue.
+  </Card>
+</CardGroup>
+
+## Boundary Map Verification
+
+The boundary map (in `ROADMAP.md`) defines contracts between slices. Verification checks these contracts are fulfilled.
+
+### Example Boundary Map
+
+```markdown
+### S01 → S02
+Produces:
+  types.ts → User, Session, AuthToken (interfaces)
+  auth.ts  → generateToken(), verifyToken(), refreshToken()
+
+Consumes: nothing (leaf node)
+```
+
+### Verification Checks
+
+After S01 completes:
+
+```bash
+# Check artifacts exist
+ls src/lib/types.ts
+ls src/lib/auth.ts
+
+# Check exports
+grep "export interface User" src/lib/types.ts
+grep "export interface Session" src/lib/types.ts
+grep "export interface AuthToken" src/lib/types.ts
+grep "export.*function generateToken" src/lib/auth.ts
+grep "export.*function verifyToken" src/lib/auth.ts
+grep "export.*function refreshToken" src/lib/auth.ts
+```
+
+All must exist for S01 to be considered complete.
+
+After S02 starts (which consumes S01's output):
+
+```bash
+# Check S02 actually imports S01's exports
+grep "import.*generateToken.*from.*auth" src/app/api/auth/login/route.ts
+grep "import.*verifyToken.*from.*auth" src/middleware.ts
+```
+
+If imports are missing, S02's verification fails — it didn't actually wire to S01.
+
+## Practical Example: Full Verification Flow
+
+### Task: T02 (Login Endpoint)
+
+**Must-haves:**
+- File `api/auth/login/route.ts` exists (min 20 lines)
+- Exports POST handler
+- Login returns JWT token for valid credentials
+- Invalid credentials return 401
+- Imports `generateToken` from `auth.ts`
+
+**Verification steps:**
+
+<Steps>
+  <Step title="Static checks">
+    ```bash
+    ls src/app/api/auth/login/route.ts  # exists?
+    wc -l src/app/api/auth/login/route.ts  # >= 20 lines?
+    grep "export.*POST" src/app/api/auth/login/route.ts  # exports POST?
+    grep "import.*generateToken" src/app/api/auth/login/route.ts  # imports generateToken?
+    ```
+  </Step>
+  
+  <Step title="Command checks">
+    ```bash
+    npm run type-check  # TypeScript happy?
+    npm test -- login.test.ts  # tests pass?
+    ```
+  </Step>
+  
+  <Step title="Behavioral checks">
+    ```bash
+    # Start dev server
+    npm run dev
+    
+    # Test valid login
+    curl -X POST http://localhost:3000/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"email":"test@example.com","password":"Test123!"}'
+    # Expect: 200, {"token":"...","user":{...}}
+    
+    # Test invalid login
+    curl -X POST http://localhost:3000/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"email":"test@example.com","password":"wrong"}'
+    # Expect: 401, {"error":"Invalid credentials"}
+    ```
+  </Step>
+  
+  <Step title="Anti-pattern check">
+    ```bash
+    # Check not a stub
+    grep "console.log" src/app/api/auth/login/route.ts  # should be empty
+    grep "TODO" src/app/api/auth/login/route.ts  # should be empty
+    
+    # Check not hardcoded
+    grep "return.*success.*true" src/app/api/auth/login/route.ts  # should be conditional
+    ```
+  </Step>
+</Steps>
+
+**Result:**
+- ✅ All checks pass
+- ✅ Artifact is substantive (45 lines, real logic)
+- ✅ Key link wired (imports generateToken)
+- ✅ Behavioral verification passed
+- ✅ No anti-patterns detected
+
+**Outcome:** Task T02 marked `[x]` as done.
+
+## Key Takeaways
+
+<Card title="Verification is Non-Negotiable" icon="shield-check">
+  Every task defines must-haves. Every task verifies must-haves before marking done. "All steps complete" is not verification.
+</Card>
+
+<Card title="Use the Strongest Tier" icon="layer-group">
+  Always prefer automated verification (static, command, behavioral) over human verification. Ask humans only when truly necessary.
+</Card>
+
+<Card title="Detect Stubs and Hardcodes" icon="magnifying-glass">
+  GSD actively looks for anti-patterns: stubs, hardcoded responses, missing error handling. Real implementation only.
+</Card>
+
+<Card title="Boundary Maps Are Contracts" icon="handshake">
+  The boundary map defines what each slice must produce. Verification checks these contracts are fulfilled.
+</Card>
+
+<Card title="UAT Is Non-Blocking" icon="forward">
+  GSD writes a UAT script and moves on. User tests when convenient. Failures create fix slices later.
+</Card>

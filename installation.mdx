@@ -1,0 +1,229 @@
+---
+title: Installation
+description: Install GSD globally, authenticate with your LLM provider, and run the first-time setup wizard.
+---
+
+# Installation
+
+GSD is distributed as a global npm package. Install it once, use it in any project.
+
+## Install GSD
+
+<CodeGroup>
+```bash npm
+npm install -g gsd-pi
+```
+
+```bash yarn
+yarn global add gsd-pi
+```
+
+```bash pnpm
+pnpm add -g gsd-pi
+```
+</CodeGroup>
+
+<Note>
+The package name is `gsd-pi` on npm. The command you run is `gsd`.
+</Note>
+
+## System Requirements
+
+GSD requires:
+
+- **Node.js** ≥ 20.6.0 (22+ recommended)
+- **Git** — initialized automatically if missing in your project
+- **An LLM provider** — see [Choose Your Provider](#choose-your-provider) below
+
+Optional (can be added later):
+- Brave Search API key (web research)
+- Tavily API key (web research — alternative to Brave)
+- Google Gemini API key (web research via Gemini Search grounding)
+- Context7 API key (library documentation lookup)
+- Jina API key (clean web page extraction)
+
+## First Launch: Setup Wizard
+
+The first time you run `gsd`, you'll see a branded setup wizard that walks you through:
+
+1. **LLM provider authentication** (OAuth or API key)
+2. **Optional tool API keys** (web search, docs, etc.)
+
+<Note>
+Every step is skippable. Press **Enter** to skip any step. You can re-run the wizard anytime with `gsd config`.
+</Note>
+
+### What the Wizard Does
+
+<Steps>
+  <Step title="Display the GSD logo">
+    Shows a branded welcome screen
+  </Step>
+  <Step title="Choose your LLM provider">
+    Presents a list of 20+ supported providers with OAuth and API key options
+  </Step>
+  <Step title="Authenticate">
+    Handles OAuth flows (opens browser, waits for callback) or collects API keys securely
+  </Step>
+  <Step title="Optional tool keys">
+    Prompts for Brave Search, Context7, Jina, Slack, Discord — all optional
+  </Step>
+  <Step title="Summary and launch">
+    Shows what was configured, then launches the GSD interactive session
+  </Step>
+</Steps>
+
+From `src/onboarding.ts:182-246`:
+
+```typescript
+export async function runOnboarding(authStorage: AuthStorage): Promise<void> {
+  // Display logo and intro
+  process.stderr.write(renderLogo(pc.cyan))
+  p.intro(pc.bold('Welcome to GSD — let\'s get you set up'))
+
+  // Step 1: LLM Provider
+  llmConfigured = await runLlmStep(p, pc, authStorage)
+
+  // Step 2: Tool API Keys (optional)
+  toolKeyCount = await runToolKeysStep(p, pc, authStorage)
+
+  // Step 3: Summary
+  p.note(summaryLines.join('\n'), 'Setup complete')
+  p.outro(pc.dim('Launching GSD...'))
+}
+```
+
+### Credential Storage
+
+All credentials are stored in `~/.gsd/auth.json` using the Pi SDK's `AuthStorage` format. This file is never committed to git.
+
+If you already have Pi installed, GSD automatically imports your existing provider credentials — no need to re-authenticate.
+
+## Choose Your Provider
+
+GSD supports **20+ model providers** through the Pi SDK. Use different models for different phases — Opus for planning, Sonnet for execution, fast models for research.
+
+### Built-in Providers
+
+<CardGroup cols={2}>
+  <Card title="Anthropic" icon="robot">
+    **Claude Opus 4, Sonnet 4**
+    
+    OAuth (Claude Max) or API key
+  </Card>
+  <Card title="OpenAI" icon="brain">
+    **GPT-4, GPT-4o, o1, o3-mini**
+    
+    API key
+  </Card>
+  <Card title="GitHub Copilot" icon="github">
+    **GPT-4o, Claude Sonnet**
+    
+    OAuth (Copilot subscription)
+  </Card>
+  <Card title="Google Gemini" icon="sparkles">
+    **Gemini 3, Gemini 2**
+    
+    OAuth or API key
+  </Card>
+  <Card title="OpenRouter" icon="network-wired">
+    **100+ models**
+    
+    Llama, DeepSeek, Qwen, and more
+  </Card>
+  <Card title="Groq" icon="bolt">
+    **Fast inference**
+    
+    Llama, Mixtral
+  </Card>
+</CardGroup>
+
+### OAuth vs API Keys
+
+**OAuth** (recommended for subscriptions):
+- Opens browser for authentication
+- Uses your existing subscription (Claude Max, GitHub Copilot)
+- No API key needed
+- Rate limits based on your plan
+
+**API Keys** (recommended for pay-as-you-go):
+- Paste your key when prompted
+- Pay per token used
+- No subscription required
+- Full control over spending
+
+From `src/onboarding.ts:250-300`:
+
+```typescript
+const choice = await p.select({
+  message: 'Choose your LLM provider',
+  options: [
+    { value: 'anthropic-oauth', label: 'Anthropic — Claude (OAuth login)', hint: 'recommended' },
+    { value: 'anthropic-api-key', label: 'Anthropic — Claude (API key)' },
+    { value: 'openai-api-key', label: 'OpenAI (API key)' },
+    { value: 'github-copilot-oauth', label: 'GitHub Copilot (OAuth login)' },
+    { value: 'openai-codex-oauth', label: 'ChatGPT Plus/Pro — Codex (OAuth login)' },
+    // ... more providers
+  ],
+})
+```
+
+## Re-run the Setup Wizard
+
+You can re-run the setup wizard anytime:
+
+```bash
+gsd config
+```
+
+This reopens the full wizard experience — choose a different provider, add tool keys, or update existing credentials.
+
+## Login from Inside GSD
+
+If you skip the wizard on first launch, you can authenticate later from inside GSD:
+
+```bash
+gsd
+/login
+```
+
+The `/login` command inside GSD opens the same provider selection flow.
+
+### Switch Models
+
+To change your default model after initial setup:
+
+```bash
+/model
+```
+
+This opens a model picker with all available models from your authenticated providers.
+
+### Per-Phase Model Selection
+
+Use different models for different phases in your preferences:
+
+```bash
+/gsd prefs
+```
+
+Example from the README (lines 296-303):
+
+```yaml
+---
+version: 1
+models:
+  research: openrouter/deepseek/deepseek-r1
+  planning: claude-opus-4-6
+  execution: claude-sonnet-4-6
+  completion: claude-sonnet-4-6
+---
+```
+
+<Tip>
+Use expensive models where quality matters (planning, complex execution) and cheaper/faster models where speed matters (research, simple completions).
+</Tip>
+
+## What's Next
+
+Now that GSD is installed and configured, head to the [Quickstart](/quickstart) to run your first command and understand the state machine.

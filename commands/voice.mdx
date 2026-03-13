@@ -1,0 +1,364 @@
+---
+title: Voice
+description: Speech-to-text transcription for hands-free interaction (macOS only)
+icon: microphone
+---
+
+GSD's voice command enables **real-time speech-to-text transcription** using macOS's native Speech framework. Dictate messages hands-free.
+
+## Command
+
+<ParamField path="/voice" type="command">
+  Toggle voice transcription on/off
+</ParamField>
+
+<ParamField path="Ctrl+Alt+V" type="shortcut">
+  Toggle voice transcription (same as `/voice`)
+</ParamField>
+
+## Requirements
+
+<Warning>
+  Voice transcription is **macOS only**. It requires the Speech framework, which is not available on Linux or Windows.
+</Warning>
+
+- **Platform:** macOS (any version supporting Speech framework)
+- **Permissions:** Microphone access (macOS will prompt on first use)
+- **Xcode CLI tools:** Required for compiling the recognizer binary
+
+### First-Time Setup
+
+The first time you run `/voice`, GSD compiles a Swift binary:
+
+```bash
+/voice
+
+🔧 Compiling speech recognizer...
+
+✓ Ready. Voice transcription active.
+```
+
+This takes ~10 seconds. The binary is cached at `~/.gsd/agent/extensions/voice/speech-recognizer` and reused on subsequent runs.
+
+### Microphone Permission
+
+macOS will prompt for microphone access:
+
+```
+"gsd" would like to access the microphone.
+
+  [Don't Allow]  [OK]
+```
+
+Click **OK** to enable voice transcription.
+
+## How It Works
+
+### Activation
+
+```bash
+/voice
+```
+
+**Effect:**
+
+1. Starts the speech recognizer binary
+2. Opens microphone stream
+3. Shows "transcribing" indicator in footer
+4. Converts speech to text in real-time
+5. Injects transcribed text into the message input
+
+### Deactivation
+
+```bash
+/voice
+# or
+<Ctrl+Alt+V>
+```
+
+**Effect:**
+
+1. Stops the speech recognizer
+2. Closes microphone stream
+3. Hides "transcribing" indicator
+
+### Toggle Behavior
+
+`/voice` and `Ctrl+Alt+V` **toggle** transcription:
+
+- **Off → On:** Starts transcription
+- **On → Off:** Stops transcription
+
+## User Interface
+
+### Footer Indicator
+
+When voice is active, the footer shows a flashing indicator:
+
+```
+/Users/you/projects/my-project (main)             ● transcribing
+↑2.3k ↓4.5k $1.23 45%/200k                       claude-sonnet-4-6
+```
+
+**● transcribing** flashes red every 500ms to indicate active listening.
+
+### Live Transcription
+
+As you speak, text appears in the message input:
+
+```
+> How do I implement webhook signature verification?
+```
+
+The text updates in real-time as the recognizer processes your speech.
+
+### Partial vs Final
+
+The recognizer emits:
+
+- **Partial results** — Tentative transcription (gray text)
+- **Final results** — Confirmed transcription (white text)
+
+Final results are committed to the input buffer when you pause or stop speaking.
+
+## Use Cases
+
+### Hands-Free Discussion
+
+Use voice during `/gsd discuss` to describe your vision:
+
+```bash
+/gsd discuss
+/voice
+
+💬 What's the vision?
+
+> (speak) I want to build a real-time multiplayer game with WebSocket sync and Redis for state management
+```
+
+### Code Review Feedback
+
+Dictate feedback while reading code:
+
+```bash
+/voice
+
+> (speak) The authentication middleware looks good but we should add rate limiting to prevent brute force attacks
+```
+
+### Long Explanations
+
+Explain complex architectural decisions without typing:
+
+```bash
+/gsd discuss
+/voice
+
+> (speak) We need to decide between microservices and a monolith. The team is small so I'm leaning toward monolith for simplicity but we should design for modularity in case we need to split later. What do you think?
+```
+
+### Meeting Notes
+
+Capture decisions during a meeting:
+
+```bash
+/voice
+
+> (speak) Team decided to use PostgreSQL for the main database and Redis for caching. Authentication will use JWT with refresh tokens. Deploy to AWS ECS with Fargate.
+```
+
+## Speech Recognition Quality
+
+GSD uses **macOS's native Speech framework**, which provides:
+
+- **High accuracy** (trained on millions of hours of speech)
+- **Punctuation inference** ("comma", "period", "question mark")
+- **Natural language understanding** ("new paragraph", "all caps", "smiley face")
+- **Multi-language support** (follows system language setting)
+
+### Tips for Better Recognition
+
+<CardGroup cols={2}>
+  <Card title="Clear Speech" icon="mouth">
+    Speak clearly and at a normal pace
+  </Card>
+  <Card title="Punctuation" icon="comma">
+    Say "comma", "period", "question mark" explicitly
+  </Card>
+  <Card title="Corrections" icon="pen">
+    Stop transcription, edit text, resume
+  </Card>
+  <Card title="Noise Reduction" icon="volume-xmark">
+    Use a quiet environment or headset mic
+  </Card>
+</CardGroup>
+
+### Language Support
+
+Voice follows your **system language setting**:
+
+```
+System Preferences → Language & Region → Preferred Languages
+```
+
+Supported languages include:
+
+- English (US, UK, AU, CA, IN)
+- Spanish (ES, MX, US)
+- French (FR, CA)
+- German (DE)
+- Italian (IT)
+- Portuguese (BR, PT)
+- Japanese (JP)
+- Korean (KR)
+- Chinese (Mandarin, Cantonese)
+- And 40+ more
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Alt+V` | Toggle voice transcription |
+| `Escape` | Stop transcription (while active) |
+| `/voice` | Toggle via command |
+
+## Troubleshooting
+
+### Issue: "failed to compile speech recognizer"
+
+**Problem:** Xcode CLI tools not installed.
+
+**Fix:**
+
+```bash
+xcode-select --install
+```
+
+Follow the prompts to install Xcode Command Line Tools.
+
+### Issue: "Microphone access denied"
+
+**Problem:** macOS denied microphone permission.
+
+**Fix:**
+
+```
+System Preferences → Security & Privacy → Privacy → Microphone
+
+Find "gsd" or "Terminal" in the list and check the box.
+```
+
+Restart GSD after granting permission.
+
+### Issue: "No transcription appearing"
+
+**Problem:** Microphone input level too low or wrong mic selected.
+
+**Fix:**
+
+```
+System Preferences → Sound → Input
+
+Select the correct microphone and adjust input volume.
+```
+
+Speak into the mic and watch the input level bars. They should move when you speak.
+
+### Issue: "Poor recognition quality"
+
+**Cause:** Background noise, accent, or unclear speech.
+
+**Fix:**
+
+- Use a **headset microphone** (better noise isolation)
+- Speak **clearly and at normal pace** (not too fast or slow)
+- **Reduce background noise** (close windows, turn off fans)
+- **Check system language** (ensure it matches your spoken language)
+
+### Issue: "Voice not available on Linux/Windows"
+
+**Cause:** Speech framework is macOS-only.
+
+**Workaround:**
+
+Use an external speech-to-text service:
+
+1. Record audio separately (e.g., with a phone)
+2. Transcribe using a web service (e.g., Otter.ai, Rev.com)
+3. Paste transcription into GSD
+
+## Performance
+
+### CPU Usage
+
+**Low impact:** The speech recognizer runs as a separate process. CPU usage is typically less than 5% even during active transcription.
+
+### Latency
+
+**Near real-time:** Partial results appear within 100-300ms. Final results are committed when you pause.
+
+### Battery Impact
+
+**Minimal:** Microphone streaming uses ~1% battery per hour on a MacBook.
+
+## Privacy
+
+GSD's voice transcription:
+
+- **Processes audio locally** (on-device, via macOS Speech framework)
+- **Does not send audio to external servers** (unless you're using a cloud LLM provider for the LLM itself)
+- **Does not record or store audio** (transcription only)
+
+Your speech is converted to text locally, then sent to the LLM provider as a text message (same as typed messages).
+
+## Example Session
+
+```bash
+$ gsd
+/gsd discuss
+
+💬 What's the vision?
+
+/voice
+
+✓ Voice transcription active.
+
+> (speak) I want to build a SaaS product for freelancers to track their time and invoices. It should have a web app and a mobile app. The backend will use Node and PostgreSQL. I want real-time sync across devices using WebSockets.
+
+(pause)
+
+✓ I want to build a SaaS product for freelancers to track their time and invoices. It should have a web app and a mobile app. The backend will use Node and PostgreSQL. I want real-time sync across devices using WebSockets.
+
+Got it. Let me summarize what I'm hearing:
+
+**Product:** Time tracking + invoicing SaaS for freelancers
+**Platforms:** Web app + mobile app
+**Backend:** Node.js + PostgreSQL
+**Real-time sync:** WebSockets
+
+Roughly 2-3 milestones, ~8 slices in the first milestone (auth, time tracking, invoicing, sync, mobile).
+
+Did I get that right, or did I miss something?
+
+/voice  # Toggle off
+
+✓ Voice transcription stopped.
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Discuss" icon="comments" href="/commands/discuss">
+    Use voice to describe your vision
+  </Card>
+  <Card title="Queue" icon="list" href="/commands/status-queue">
+    Dictate milestone plans
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Enable voice: `/voice` or `Ctrl+Alt+V`
+2. Grant microphone permission when prompted
+3. Speak your message
+4. Toggle off when done

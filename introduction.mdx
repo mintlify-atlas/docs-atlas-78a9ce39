@@ -1,0 +1,121 @@
+---
+title: Introduction to GSD
+description: Meet GSD 2 — a standalone coding agent that builds software autonomously with fresh context windows, programmatic control, and real crash recovery.
+---
+
+# Introduction to GSD
+
+GSD 2 is **the evolution of Get Shit Done** — now a real coding agent built on the [Pi SDK](https://github.com/badlogic/pi-mono).
+
+The original GSD went viral as a prompt framework for Claude Code. It worked, but it was fighting the tool — injecting prompts through slash commands, hoping the LLM would follow instructions, with no actual control over context windows, sessions, or execution.
+
+**This version is different.** GSD is now a standalone CLI with direct TypeScript access to the agent harness itself. That means GSD can actually *do* what v1 could only *ask* the LLM to do: clear context between tasks, inject exactly the right files at dispatch time, manage git branches, track cost and tokens, detect stuck loops, recover from crashes, and auto-advance through an entire milestone without human intervention.
+
+<Note>
+One command. Walk away. Come back to a built project with clean git history.
+</Note>
+
+## What GSD Does
+
+GSD structures work into a three-level hierarchy:
+
+```
+Milestone  →  a shippable version (4-10 slices)
+  Slice    →  one demoable vertical capability (1-7 tasks)
+    Task   →  one context-window-sized unit of work
+```
+
+The iron rule: **a task must fit in one context window.** If it can't, it's two tasks.
+
+### The Loop
+
+Each slice flows through phases automatically:
+
+```
+Research → Plan → Execute (per task) → Complete → Reassess Roadmap → Next Slice
+```
+
+<Steps>
+  <Step title="Research">
+    Scouts the codebase and relevant docs
+  </Step>
+  <Step title="Plan">
+    Decomposes the slice into tasks with must-haves (mechanically verifiable outcomes)
+  </Step>
+  <Step title="Execute">
+    Runs each task in a fresh context window with only the relevant files pre-loaded
+  </Step>
+  <Step title="Complete">
+    Writes the summary, UAT script, marks the roadmap, and commits
+  </Step>
+  <Step title="Reassess">
+    Checks if the roadmap still makes sense given what was learned
+  </Step>
+</Steps>
+
+## v1 vs v2: What Changed
+
+The original GSD was a collection of markdown prompts installed into `~/.claude/commands/`. It relied entirely on the LLM reading those prompts and doing the right thing. That worked surprisingly well — but it had hard limits.
+
+| Feature | v1 (Prompt Framework) | v2 (Agent Application) |
+|---|---|---|
+| **Runtime** | Claude Code slash commands | Standalone CLI via Pi SDK |
+| **Context management** | Hope the LLM doesn't fill up | Fresh session per task, programmatic |
+| **Auto mode** | LLM self-loop | State machine reading `.gsd/` files |
+| **Crash recovery** | None | Lock files + session forensics |
+| **Git strategy** | LLM writes git commands | Programmatic branch-per-slice, squash merge |
+| **Cost tracking** | None | Per-unit token/cost ledger with dashboard |
+| **Stuck detection** | None | Retry once, then stop with diagnostics |
+| **Timeout supervision** | None | Soft/idle/hard timeouts with recovery steering |
+| **Context injection** | "Read this file" | Pre-inlined into dispatch prompt |
+| **Roadmap reassessment** | Manual | Automatic after each slice completes |
+| **Skill discovery** | None | Auto-detect and install relevant skills during research |
+
+### Why These Changes Matter
+
+**No context control** meant the LLM accumulated garbage over a long session. Quality degraded. GSD v2 gives every task a fresh 200k-token context window.
+
+**No real automation** meant "auto mode" was the LLM calling itself in a loop, burning context on orchestration overhead. GSD v2 uses a state machine that reads `.gsd/` files on disk.
+
+**No crash recovery** meant if the session died mid-task, you started over. GSD v2 tracks progress with lock files and can synthesize a recovery briefing from surviving session files.
+
+**No observability** meant no cost tracking, no progress dashboard, no stuck detection. GSD v2 tracks every token and dollar spent, broken down by phase, slice, and model.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Autonomous Mode" icon="robot">
+    Run `/gsd auto` and walk away. GSD researches, plans, executes, commits, and advances through every slice until the milestone is complete.
+  </Card>
+  <Card title="Fresh Context" icon="refresh">
+    Every task gets a clean 200k-token context window. No accumulated garbage. No "I'll be more concise now."
+  </Card>
+  <Card title="Crash Recovery" icon="life-ring">
+    Lock files track current work. If the session dies, GSD resumes with full context from surviving session files.
+  </Card>
+  <Card title="Cost Tracking" icon="dollar-sign">
+    Real-time dashboard shows per-unit token usage and cost, broken down by phase, slice, and model.
+  </Card>
+  <Card title="Git Management" icon="code-branch">
+    Branch-per-slice with squash merge. One commit per slice on main. Individual slices are revertable.
+  </Card>
+  <Card title="Multi-Model Support" icon="layer-group">
+    Use different models for different phases — Opus for planning, Sonnet for execution, fast models for research.
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+**Building new projects from scratch** — Start with a discussion flow that captures your vision, then let GSD research, plan, and build.
+
+**Adding features to existing codebases** — GSD scouts the codebase during research, finds the right files, and makes targeted changes.
+
+**Refactoring and cleanup** — Define the outcome in your roadmap, let GSD handle the mechanical work across multiple files.
+
+**Documentation generation** — GSD can read your code, understand the architecture, and write docs that stay in sync.
+
+## What's Next
+
+Ready to get started? Head to [Installation](/installation) to install GSD and configure your first LLM provider.
+
+Or jump straight to the [Quickstart](/quickstart) to run your first `/gsd` command.

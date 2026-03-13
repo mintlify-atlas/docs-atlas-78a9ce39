@@ -1,0 +1,381 @@
+---
+title: Model Selection
+description: Choosing models per phase (Opus for planning, Sonnet for execution), OpenRouter usage, OAuth vs API keys
+---
+
+## Overview
+
+GSD isn't locked to one provider or model. You can use different models for different phases — Opus for planning, Sonnet for execution, DeepSeek for research. This guide covers how to choose models and authenticate with providers.
+
+## Per-Phase Model Selection
+
+GSD has four phases, each with different requirements:
+
+<CardGroup cols={2}>
+  <Card title="Research" icon="magnifying-glass">
+    **Goal:** Scout codebase and docs
+    
+    **Requirements:** Fast, cheap
+    
+    **Recommended:** Sonnet, DeepSeek R1, Gemini Flash
+  </Card>
+  
+  <Card title="Planning" icon="pen-ruler">
+    **Goal:** Decompose work into tasks
+    
+    **Requirements:** High quality, reasoning
+    
+    **Recommended:** Opus, o1, Gemini Pro
+  </Card>
+  
+  <Card title="Execution" icon="code">
+    **Goal:** Write code, verify outcomes
+    
+    **Requirements:** Balanced quality and speed
+    
+    **Recommended:** Sonnet, GPT-4o, Gemini Pro
+  </Card>
+  
+  <Card title="Completion" icon="check">
+    **Goal:** Write summaries, UAT scripts
+    
+    **Requirements:** Fast, cheap
+    
+    **Recommended:** Sonnet, Haiku, Gemini Flash
+  </Card>
+</CardGroup>
+
+## Configuring Models
+
+<Steps>
+  <Step title="Open preferences">
+    ```bash
+    gsd
+    /gsd prefs
+    ```
+  </Step>
+  
+  <Step title="Set models per phase">
+    ```yaml
+    ---
+    version: 1
+    models:
+      research: claude-sonnet-4-6
+      planning: claude-opus-4-6
+      execution: claude-sonnet-4-6
+      completion: claude-sonnet-4-6
+    ---
+    ```
+    
+    Model IDs depend on your provider. See [Provider Model IDs](#provider-model-ids) below.
+  </Step>
+  
+  <Step title="Save and continue">
+    Changes apply at the next phase boundary. You don't need to restart GSD.
+  </Step>
+</Steps>
+
+## Provider Model IDs
+
+### Anthropic (Direct API)
+
+| Model | ID | Cost (Input/Output) |
+|-------|----|---------|
+| Claude Opus 4 | `claude-opus-4-6` | $15/M → $75/M |
+| Claude Sonnet 4 | `claude-sonnet-4-6` | $3/M → $15/M |
+| Claude Haiku 4 | `claude-haiku-4-6` | $0.25/M → $1.25/M |
+
+### OpenAI (Direct API)
+
+| Model | ID | Cost (Input/Output) |
+|-------|----|---------|
+| GPT-4o | `gpt-4o` | $2.50/M → $10/M |
+| o1 | `o1` | $15/M → $60/M |
+| o1-mini | `o1-mini` | $3/M → $12/M |
+
+### Google Gemini
+
+| Model | ID | Cost (Input/Output) |
+|-------|----|---------|
+| Gemini 2.0 Flash | `gemini-2.0-flash` | $0.075/M → $0.30/M |
+| Gemini 1.5 Pro | `gemini-1.5-pro` | $1.25/M → $5/M |
+
+### OpenRouter
+
+| Model | ID | Cost (Input/Output) |
+|-------|----|---------|
+| Claude Opus 4 | `openrouter/anthropic/claude-opus-4` | $15/M → $75/M |
+| Claude Sonnet 4 | `openrouter/anthropic/claude-sonnet-4` | $3/M → $15/M |
+| DeepSeek R1 | `openrouter/deepseek/deepseek-r1` | $0.55/M → $2.19/M |
+| Llama 3.3 70B | `openrouter/meta-llama/llama-3.3-70b` | $0.35/M → $0.40/M |
+| Gemini 2.0 Flash | `openrouter/google/gemini-2.0-flash` | $0.075/M → $0.30/M |
+
+For the full OpenRouter catalog, see [openrouter.ai/models](https://openrouter.ai/models).
+
+## Authentication: OAuth vs API Keys
+
+GSD supports two authentication methods:
+
+<CardGroup cols={2}>
+  <Card title="OAuth" icon="shield">
+    **Best for:** Claude Max, GitHub Copilot, ChatGPT Plus/Pro subscribers
+    
+    **Pros:** No API key needed, uses existing subscription
+    
+    **Cons:** Limited to supported providers
+  </Card>
+  
+  <Card title="API Key" icon="key">
+    **Best for:** Direct provider APIs, OpenRouter
+    
+    **Pros:** Access to any provider, full control
+    
+    **Cons:** Requires API key, pay-per-use
+  </Card>
+</CardGroup>
+
+### OAuth Providers
+
+GSD supports OAuth for:
+
+- **Anthropic** — Claude Max subscribers
+- **GitHub Copilot** — Copilot subscribers
+- **OpenAI Codex** — ChatGPT Plus/Pro subscribers
+- **Google Gemini CLI** — Gemini Advanced subscribers
+- **Antigravity** — Gemini 3, Claude, GPT-OSS
+
+### Logging in with OAuth
+
+<Steps>
+  <Step title="Run the login command">
+    ```bash
+    gsd
+    /login
+    ```
+  </Step>
+  
+  <Step title="Select OAuth provider">
+    Example: "Anthropic — Claude (OAuth login)"
+  </Step>
+  
+  <Step title="Follow browser flow">
+    GSD opens your browser. Authorize the app. Copy the redirect URL if needed.
+  </Step>
+  
+  <Step title="Done">
+    GSD stores credentials in `~/.gsd/auth.json`. You're ready to go.
+  </Step>
+</Steps>
+
+### Logging in with API Key
+
+<Steps>
+  <Step title="Get your API key">
+    - **Anthropic:** [console.anthropic.com](https://console.anthropic.com)
+    - **OpenAI:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+    - **OpenRouter:** [openrouter.ai/keys](https://openrouter.ai/keys)
+    - **Google:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+  </Step>
+  
+  <Step title="Run the login command">
+    ```bash
+    gsd
+    /login
+    ```
+  </Step>
+  
+  <Step title="Select API key provider">
+    Example: "Anthropic — Claude (API key)"
+  </Step>
+  
+  <Step title="Paste your key">
+    GSD masks the input. Keys are stored in `~/.gsd/auth.json`.
+  </Step>
+</Steps>
+
+## Using OpenRouter
+
+[OpenRouter](https://openrouter.ai) gives you access to hundreds of models through a single API key.
+
+### Why OpenRouter?
+
+<CardGroup cols={2}>
+  <Card title="One API Key" icon="key">
+    Access Claude, GPT, Gemini, Llama, DeepSeek, and more with one key.
+  </Card>
+  
+  <Card title="Cost Flexibility" icon="dollar-sign">
+    Use expensive models for planning, cheap models for research.
+  </Card>
+  
+  <Card title="Fallback Models" icon="arrows-rotate">
+    If one model is down, switch to another instantly.
+  </Card>
+  
+  <Card title="Usage Dashboard" icon="chart-line">
+    Track spending across all models in one place.
+  </Card>
+</CardGroup>
+
+### Setting Up OpenRouter
+
+<Steps>
+  <Step title="Sign up">
+    Go to [openrouter.ai](https://openrouter.ai) and create an account.
+  </Step>
+  
+  <Step title="Get an API key">
+    Navigate to [openrouter.ai/keys](https://openrouter.ai/keys) and create a key.
+  </Step>
+  
+  <Step title="Log in to GSD">
+    ```bash
+    gsd
+    /login
+    ```
+    
+    Select "Other provider (API key)" → "OpenRouter"
+    
+    Paste your API key.
+  </Step>
+  
+  <Step title="Configure models">
+    ```bash
+    /gsd prefs
+    ```
+    
+    ```yaml
+    models:
+      research: openrouter/deepseek/deepseek-r1
+      planning: openrouter/anthropic/claude-opus-4
+      execution: openrouter/anthropic/claude-sonnet-4
+      completion: openrouter/google/gemini-2.0-flash
+    ```
+  </Step>
+</Steps>
+
+## Cost-Optimized Model Strategy
+
+Use expensive models where quality matters, cheap models where speed matters.
+
+### Example 1: Budget-Conscious
+
+```yaml
+models:
+  research: openrouter/google/gemini-2.0-flash      # $0.075/M → $0.30/M
+  planning: openrouter/anthropic/claude-sonnet-4    # $3/M → $15/M
+  execution: openrouter/anthropic/claude-sonnet-4   # $3/M → $15/M
+  completion: openrouter/google/gemini-2.0-flash    # $0.075/M → $0.30/M
+```
+
+**Total estimated cost for 10-task milestone:** ~$5-10
+
+### Example 2: Quality-First
+
+```yaml
+models:
+  research: claude-sonnet-4-6                       # $3/M → $15/M
+  planning: claude-opus-4-6                         # $15/M → $75/M
+  execution: claude-opus-4-6                        # $15/M → $75/M
+  completion: claude-sonnet-4-6                     # $3/M → $15/M
+```
+
+**Total estimated cost for 10-task milestone:** ~$50-100
+
+### Example 3: Hybrid
+
+```yaml
+models:
+  research: openrouter/deepseek/deepseek-r1         # $0.55/M → $2.19/M
+  planning: claude-opus-4-6                         # $15/M → $75/M
+  execution: claude-sonnet-4-6                      # $3/M → $15/M
+  completion: openrouter/google/gemini-2.0-flash    # $0.075/M → $0.30/M
+```
+
+**Total estimated cost for 10-task milestone:** ~$20-40
+
+## Switching Models Mid-Milestone
+
+You can change models at any time. Changes apply at the next phase boundary.
+
+<Steps>
+  <Step title="Open preferences while auto mode runs">
+    Use the [two-terminal pattern](/guides/multi-terminal-workflow):
+    
+    Terminal 1: `/gsd auto` (running)
+    
+    Terminal 2: `/gsd prefs` (edit models)
+  </Step>
+  
+  <Step title="Edit models">
+    Change the model for any phase. Example:
+    
+    ```yaml
+    execution: claude-sonnet-4-6  # switch from Opus to save cost
+    ```
+  </Step>
+  
+  <Step title="Auto mode picks it up">
+    At the next task execution, auto mode uses the new model.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Model not found error">
+    Check the model ID. For OpenRouter models, use the full path:
+    
+    ```yaml
+    openrouter/anthropic/claude-sonnet-4
+    ```
+    
+    Not just `claude-sonnet-4`.
+  </Accordion>
+  
+  <Accordion title="API key invalid">
+    Re-run the login command:
+    
+    ```bash
+    /login
+    ```
+    
+    If using OpenRouter, check that your key has credits at [openrouter.ai/credits](https://openrouter.ai/credits).
+  </Accordion>
+  
+  <Accordion title="OAuth flow failed">
+    If the OAuth browser flow fails:
+    
+    1. Try again: `/login`
+    2. If it fails again, use an API key instead
+    3. Report the issue: [github.com/gsd-build/GSD-2/issues](https://github.com/gsd-build/GSD-2/issues)
+  </Accordion>
+  
+  <Accordion title="Model too expensive">
+    Check cost projections:
+    
+    ```bash
+    /gsd status
+    ```
+    
+    Switch to a cheaper model:
+    
+    ```bash
+    /gsd prefs
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+- **Use Opus for planning** — good planning saves cost on execution
+- **Use cheap models for research** — DeepSeek, Gemini Flash work great
+- **Use Sonnet for most execution** — balanced quality and cost
+- **Set a budget ceiling** — prevent runaway costs
+- **Try OpenRouter** — one key, many models, easy switching
+
+## Related
+
+- [Cost Tracking](/guides/cost-tracking) — Understanding the cost dashboard and projections
+- [Long-Running Work](/guides/long-running-work) — Running auto mode overnight with budget ceilings
+- [Multi-Terminal Workflow](/guides/multi-terminal-workflow) — Switching models while auto mode runs

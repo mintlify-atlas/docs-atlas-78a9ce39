@@ -1,0 +1,325 @@
+---
+title: Running Long Sessions
+description: How to run auto mode overnight, handle interruptions, and resume work using the continue protocol
+---
+
+## Overview
+
+GSD is designed for autonomous execution. Run `/gsd auto` in one terminal, walk away, and come back to completed work. This guide covers how to run long sessions, handle interruptions, and resume exactly where you left off.
+
+## Auto Mode Basics
+
+Auto mode is a state machine driven by files on disk. It reads `.gsd/STATE.md`, determines the next unit of work, creates a fresh agent session, and executes.
+
+```bash
+gsd
+/gsd auto
+```
+
+Auto mode will:
+- Research the codebase and ecosystem
+- Plan slices into tasks
+- Execute each task in a fresh context window
+- Verify outcomes
+- Commit work with clean git history
+- Advance to the next slice automatically
+
+**Walk away.** Auto mode runs until the milestone is complete or you stop it.
+
+## The Two-Terminal Pattern
+
+The recommended workflow: run auto mode in one terminal, steer from another.
+
+<Steps>
+  <Step title="Terminal 1: Let it build">
+    ```bash
+    gsd
+    /gsd auto
+    ```
+    
+    This terminal executes work autonomously.
+  </Step>
+  
+  <Step title="Terminal 2: Steer while it works">
+    ```bash
+    gsd
+    /gsd discuss    # talk through architecture decisions
+    /gsd status     # check progress
+    /gsd queue      # queue the next milestone
+    ```
+    
+    Both terminals read and write the same `.gsd/` files on disk. Your decisions in terminal 2 are picked up automatically at the next phase boundary — no need to stop auto mode.
+  </Step>
+</Steps>
+
+## Continue Protocol
+
+When work is interrupted mid-task, GSD writes a `continue.md` file that captures exactly where it left off.
+
+### When continue.md is Created
+
+- You press Escape or Ctrl+C during task execution
+- Context window is getting full and the agent pauses
+- Session crashes mid-task
+- You explicitly ask the agent to pause
+
+### What's Captured
+
+```markdown
+---
+milestone: M001
+slice: S01
+task: T02
+step: 3
+total_steps: 7
+saved_at: 2026-03-07T15:30:00Z
+---
+
+## Completed Work
+- What's already done in this task and prior tasks in the slice.
+
+## Remaining Work
+- What steps remain, with enough detail to resume.
+
+## Decisions Made
+- Key decisions and WHY (so next session doesn't re-debate).
+
+## Context
+The "vibe" — what you were thinking, what's tricky, what to watch out for.
+
+## Next Action
+The EXACT first thing to do when resuming. Not vague. Specific.
+```
+
+### How to Resume
+
+<Steps>
+  <Step title="Start a new session">
+    ```bash
+    gsd
+    /gsd auto
+    ```
+    
+    Or use step mode: `/gsd` or `/gsd next`
+  </Step>
+  
+  <Step title="GSD reads continue.md automatically">
+    The agent loads the saved state and picks up from "Next Action".
+  </Step>
+  
+  <Step title="continue.md is deleted after resume">
+    It's consumed, not permanent. Once the work continues, the file is removed.
+  </Step>
+</Steps>
+
+## Handling Interruptions
+
+### Graceful Stop
+
+Press **Escape** or run:
+
+```bash
+/gsd stop
+```
+
+This pauses auto mode gracefully. The current task completes, state is saved, and you can resume later.
+
+### Forced Stop (Ctrl+C)
+
+If you need to kill the session immediately, use Ctrl+C. GSD will attempt to write `continue.md` before exiting, but if the context is very large, this may fail.
+
+**Best practice:** Use Escape or `/gsd stop` instead of Ctrl+C for clean state preservation.
+
+### Session Crashes
+
+If the session crashes mid-task, GSD's recovery system kicks in:
+
+1. **Lock files** track the current unit of work
+2. **Session forensics** read the surviving session file
+3. **Recovery briefing** synthesizes context from every tool call that made it to disk
+4. **Resume** with full context in the next `/gsd auto`
+
+You don't need to do anything special — just run `/gsd auto` again.
+
+## Running Overnight
+
+GSD is designed to run unattended for hours.
+
+### Before You Go
+
+<CardGroup cols={2}>
+  <Card title="Check your budget ceiling" icon="dollar-sign">
+    Set a budget ceiling in preferences to auto-pause when reached:
+    
+    ```bash
+    /gsd prefs
+    ```
+    
+    Set `budget_ceiling: 50.00` or your preferred limit.
+  </Card>
+  
+  <Card title="Review timeouts" icon="clock">
+    Default timeouts:
+    - Soft: 20 minutes (warns agent to wrap up)
+    - Idle: 10 minutes (detects stalls)
+    - Hard: 30 minutes (pauses auto mode)
+    
+    Adjust in preferences if needed.
+  </Card>
+  
+  <Card title="Verify git is clean" icon="code-branch">
+    GSD handles all git operations, but start from a clean main branch:
+    
+    ```bash
+    git status
+    ```
+  </Card>
+  
+  <Card title="Check progress dashboard" icon="chart-line">
+    ```bash
+    /gsd status
+    ```
+    
+    Or press `Ctrl+Alt+G` to see the real-time overlay.
+  </Card>
+</CardGroup>
+
+### Start Auto Mode
+
+```bash
+gsd
+/gsd auto
+```
+
+Let it run. Come back in the morning.
+
+### What to Expect
+
+When you return:
+
+- **All completed slices** are on `main` as clean squash commits
+- **Work-in-progress** is on a `gsd/M001/SXX` branch
+- **State file** shows current position
+- **Dashboard** shows cost breakdown and progress
+- **UAT scripts** are ready for human testing
+
+If auto mode hit a budget ceiling or timeout, it pauses gracefully. Resume with `/gsd auto`.
+
+## Monitoring Progress
+
+While auto mode runs, you can check progress without interrupting:
+
+### Real-Time Dashboard
+
+Press `Ctrl+Alt+G` or run:
+
+```bash
+/gsd status
+```
+
+Shows:
+- Current milestone, slice, task
+- Auto mode elapsed time and phase
+- Per-unit cost and token breakdown
+- Completed and in-progress units
+
+### State File
+
+Read `.gsd/STATE.md` directly:
+
+```bash
+cat .gsd/STATE.md
+```
+
+Shows the current action, recent decisions, and blockers.
+
+### Git History
+
+Check what's been committed:
+
+```bash
+git log --oneline
+```
+
+Each slice is one clean commit on `main`.
+
+## Pausing and Resuming
+
+### Pause
+
+```bash
+/gsd stop
+```
+
+Or press **Escape** in the running session.
+
+### Resume
+
+```bash
+gsd
+/gsd auto
+```
+
+GSD reads disk state and continues from where it left off. No manual state reconstruction needed.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Auto mode stopped mid-task">
+    Check for `continue.md` in the active slice directory:
+    
+    ```bash
+    ls .gsd/milestones/M001/slices/S01/continue.md
+    ```
+    
+    If it exists, run `/gsd auto` to resume. If it doesn't exist, check `STATE.md` for the next action.
+  </Accordion>
+  
+  <Accordion title="Session crashed without saving continue.md">
+    GSD's crash recovery reads the session file and reconstructs context. Just run:
+    
+    ```bash
+    /gsd auto
+    ```
+    
+    The recovery system synthesizes a briefing from tool calls that made it to disk.
+  </Accordion>
+  
+  <Accordion title="Auto mode keeps retrying the same task">
+    This is stuck detection. If a task fails twice, auto mode stops with diagnostics. Check:
+    
+    ```bash
+    /gsd status
+    ```
+    
+    Fix the blocker manually, then resume.
+  </Accordion>
+  
+  <Accordion title="Budget ceiling reached">
+    Auto mode pauses when the budget ceiling is hit. Check cost in the dashboard:
+    
+    ```bash
+    /gsd status
+    ```
+    
+    Adjust the ceiling in preferences if needed, then resume:
+    
+    ```bash
+    /gsd auto
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+- **Use the two-terminal pattern** — let auto mode run while you steer from another terminal
+- **Set a budget ceiling** before running overnight
+- **Press Escape** instead of Ctrl+C for clean stops
+- **Check STATE.md** when resuming to understand where you are
+- **Let auto mode finish slices** — each slice is a clean commit boundary
+
+## Related
+
+- [Cost Tracking](/guides/cost-tracking) — Understanding the cost dashboard and budget ceilings
+- [Recovery & Troubleshooting](/guides/recovery-troubleshooting) — What to do when things go wrong
+- [Multi-Terminal Workflow](/guides/multi-terminal-workflow) — Advanced concurrent operations

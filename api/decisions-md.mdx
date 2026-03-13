@@ -1,0 +1,214 @@
+---
+title: 'decisions.md'
+description: 'Append-only decisions register file format'
+icon: 'scale-balanced'
+---
+
+## Overview
+
+`decisions.md` is the **append-only decisions register** that lives at `.gsd/decisions.md`. It captures all architectural, pattern, library, and scope decisions made during the project.
+
+<Warning>
+**Critical:** This file is **append-only**. Rows are NEVER edited or removed. To reverse a decision, add a new row that supersedes it.
+</Warning>
+
+## File Format
+
+```markdown
+# Decisions Register
+
+<!-- Append-only. Never edit or remove existing rows.
+     To reverse a decision, add a new row that supersedes it.
+     Read this file at the start of any planning or research phase. -->
+
+| # | When | Scope | Decision | Choice | Rationale | Revisable? |
+|---|------|-------|----------|--------|-----------|------------|
+| D001 | M001/S01 | library | Validation library | Zod | Type inference, already in deps | No |
+| D002 | M001/S01 | arch | Session storage | HTTP-only cookies | Security, SSR compat | Yes — if mobile added |
+| D003 | M001/S02 | api | API versioning | URL prefix /v1 | Simple, fits scale | Yes |
+| D004 | M001/S03 | convention | Error format | RFC 7807 | Standard, client-friendly | No |
+| D005 | M002/S01 | arch | Session storage | JWT in Authorization header | Mobile client needs it (supersedes D002) | No |
+```
+
+## Table Columns
+
+<ParamField path="#" type="string" required>
+  Sequential ID (`D001`, `D002`, ...). Never reused. Always increment even when superseding.
+</ParamField>
+
+<ParamField path="When" type="string" required>
+  Where the decision was made. Format:
+  - `M001` — milestone level
+  - `M001/S01` — slice level
+  - `M001/S01/T02` — task level
+</ParamField>
+
+<ParamField path="Scope" type="enum" required>
+  Category tag:
+  - `arch` — Architecture decisions
+  - `pattern` — Code patterns and conventions
+  - `library` — Third-party library choices
+  - `data` — Data modeling and storage
+  - `api` — API design decisions
+  - `scope` — Feature scope boundaries
+  - `convention` — Naming and style conventions
+</ParamField>
+
+<ParamField path="Decision" type="string" required>
+  Short description of what was decided. Keep it concise and scannable.
+</ParamField>
+
+<ParamField path="Choice" type="string" required>
+  The specific choice made. This is the "answer" to the decision.
+</ParamField>
+
+<ParamField path="Rationale" type="string" required>
+  Why this choice was made. Keep it brief but informative.
+</ParamField>
+
+<ParamField path="Revisable?" type="string" required>
+  Whether this decision can be revisited. Format:
+  - `No` — Locked decision
+  - `Yes` — Can be revisited anytime
+  - `Yes — [trigger condition]` — Can be revisited if condition occurs
+  
+  Examples:
+  - `No`
+  - `Yes — if mobile added`
+  - `Yes — after M002 ships`
+</ParamField>
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Append-Only" icon="plus">
+    Rows are NEVER edited or removed. To reverse a decision, add a new row that supersedes it.
+  </Card>
+  <Card title="Reference Old IDs" icon="link">
+    When superseding, reference the old decision ID in the Choice or Rationale column.
+  </Card>
+  <Card title="Sequential IDs" icon="list-ol">
+    IDs are never reused. Always increment: D001, D002, D003, ...
+  </Card>
+  <Card title="Immutable After Write" icon="lock">
+    Once a row is written, it never changes. The register is a historical record.
+  </Card>
+</CardGroup>
+
+## When to Read
+
+Read `.gsd/decisions.md` at the start of:
+
+- **Planning phase** (milestone or slice)
+- **Research phase** (milestone or slice)
+- **Task execution** (if the task involves architectural choices)
+
+<Info>
+**Why read it?** To respect existing decisions and avoid re-debating choices that were already made.
+</Info>
+
+## When to Write
+
+Append to `.gsd/decisions.md` during:
+
+1. **Discussion phase** — Seed decisions from `context.md`
+2. **Planning phase** — Capture structural choices (slice boundaries, tech stack, patterns)
+3. **Task execution** — If an architectural or library choice was made mid-task
+4. **Slice completion** — Catch-all review: scan task summaries for `key_decisions` and add any that were missed
+
+<Warning>
+Don't over-populate. Only record decisions that:
+- Affect future work
+- Resolve ambiguity
+- Lock in a non-obvious choice
+
+Not every choice is a decision worth recording.
+</Warning>
+
+## Superseding Decisions
+
+To reverse or modify a decision:
+
+1. **Do NOT edit the old row**
+2. Add a new row with a new ID
+3. Reference the old ID in the new row
+
+### Example
+
+```markdown
+| D002 | M001/S01 | arch | Session storage | HTTP-only cookies | Security, SSR compat | Yes — if mobile added |
+| D005 | M002/S01 | arch | Session storage | JWT in Authorization header | Mobile client needs it (supersedes D002) | No |
+```
+
+Row D005 supersedes D002. Both rows remain in the file forever.
+
+## Revisability Guidelines
+
+<ResponseField name="No" type="locked">
+  Decision is locked and should not be revisited. Examples:
+  - Core architectural foundations
+  - Shipped public APIs
+  - Decisions with high migration cost
+</ResponseField>
+
+<ResponseField name="Yes" type="flexible">
+  Decision can be revisited anytime without conditions. Examples:
+  - Internal implementation details
+  - Patterns that haven't spread widely
+  - Experimental choices
+</ResponseField>
+
+<ResponseField name="Yes — [condition]" type="conditional">
+  Decision can be revisited if a specific trigger occurs. Examples:
+  - `Yes — if mobile added`
+  - `Yes — after M002 ships`
+  - `Yes — if performance issues arise`
+</ResponseField>
+
+## Example Decision Register
+
+```markdown
+# Decisions Register
+
+<!-- Append-only. Never edit or remove existing rows.
+     To reverse a decision, add a new row that supersedes it.
+     Read this file at the start of any planning or research phase. -->
+
+| # | When | Scope | Decision | Choice | Rationale | Revisable? |
+|---|------|-------|----------|--------|-----------|------------|
+| D001 | M001/S01 | library | Validation library | Zod | Type inference, already in deps | No |
+| D002 | M001/S01 | arch | Session storage | HTTP-only cookies | Security, SSR compat | Yes — if mobile added |
+| D003 | M001/S02 | api | API versioning | URL prefix /v1 | Simple, fits scale | Yes |
+| D004 | M001/S03 | convention | Error format | RFC 7807 | Standard, client-friendly | No |
+| D005 | M001/S03 | library | JWT library | jose | Better TS support than jsonwebtoken | No |
+| D006 | M001/S03 | pattern | Test structure | lib/**/*.test.ts | Colocate tests with source | Yes |
+| D007 | M001/S04 | data | User ID format | UUIDv7 | Time-ordered, indexable | No |
+| D008 | M002/S01 | arch | Session storage | JWT in Authorization header | Mobile client needs it (supersedes D002) | No |
+| D009 | M002/S02 | scope | Push notifications | Defer to M003 | Not blocking for MVP | Yes — after M002 UAT |
+```
+
+## Integration with Summaries
+
+Task summaries include a `key_decisions` field:
+
+```yaml
+key_decisions:
+  - "Used jose instead of jsonwebtoken: better TypeScript support"
+  - "Access tokens expire in 15min: balance security and UX"
+```
+
+During **slice completion**, review these `key_decisions` and ensure any significant ones are captured in `.gsd/decisions.md`.
+
+## Related Files
+
+<CardGroup cols={3}>
+  <Card title="context.md" href="/concepts/context-engineering" icon="file-pen">
+    Discussion phase decisions (seed for decisions.md)
+  </Card>
+  <Card title="summary.md" href="/api/summary-md" icon="file-lines">
+    Task summaries with key_decisions
+  </Card>
+  <Card title="roadmap.md" href="/api/roadmap-md" icon="map">
+    Milestone plan
+  </Card>
+</CardGroup>

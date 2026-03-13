@@ -1,80 +1,138 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get up and running with GSD in minutes
 ---
 
-## Get started in three steps
+## Install GSD
 
-Get your documentation site running locally and make your first customization.
+<CodeGroup>
+```bash npm
+npm install -g gsd-pi
+```
 
-### Step 1: Set up your local environment
+```bash yarn
+yarn global add gsd-pi
+```
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+```bash pnpm
+pnpm add -g gsd-pi
+```
+</CodeGroup>
+
+<Note>Requires Node.js >= 20.6.0</Note>
+
+## Log in to a Provider
+
+First, choose your LLM provider:
+
+<Steps>
+  <Step title="Launch GSD">
+    ```bash
+    gsd
+    ```
+  </Step>
+  
+  <Step title="Run the login command">
+    ```bash
+    /login
+    ```
+  </Step>
+  
+  <Step title="Select your provider">
+    Choose from 20+ providers: Anthropic, OpenAI, Google, OpenRouter, GitHub Copilot, and more.
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    - If you have a **Claude Max** or **GitHub Copilot** subscription, the OAuth flow handles everything
+    - Otherwise, paste your API key when prompted
+  </Step>
+  
+  <Step title="Select a default model">
+    GSD auto-selects a default model after login. To switch models later:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    /model
+    ```
+  </Step>
+</Steps>
 
-### Step 2: Deploy your changes
+## Run Your First Command
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+Open a terminal in your project and run:
+
+```bash
+gsd
+```
+
+GSD opens an interactive agent session. From there, you have two ways to work:
+
+<Tabs>
+  <Tab title="Step Mode">
+    Type `/gsd` and GSD executes one unit of work at a time, pausing between each with a wizard showing what completed and what's next.
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    /gsd
+    ```
+    
+    **What happens:**
+    - No project yet? It starts the discussion flow
+    - Roadmap exists? It plans or executes the next step
+    - Same state machine as auto mode, but you stay in the loop
+  </Tab>
+  
+  <Tab title="Auto Mode">
+    Type `/gsd auto` and walk away. GSD researches, plans, executes, verifies, commits, and advances through every slice until the milestone is complete.
+    
+    ```bash
+    /gsd auto
+    ```
+    
+    **What happens:**
+    - Fresh context window per task
+    - Automatic git branching
+    - Crash recovery
+    - No babysitting required
+  </Tab>
+</Tabs>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Two Terminals, One Project
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+The real workflow: run auto mode in one terminal, steer from another.
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Terminal 1: Let it build" icon="robot">
+    ```bash
+    gsd
+    /gsd auto
+    ```
+  </Card>
+  
+  <Card title="Terminal 2: Steer while it works" icon="messages">
+    ```bash
+    gsd
+    /gsd discuss    # talk through architecture decisions
+    /gsd status     # check progress
+    /gsd queue      # queue the next milestone
+    ```
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+Both terminals read and write the same `.gsd/` files on disk. Your decisions in terminal 2 are picked up automatically at the next phase boundary - no need to stop auto mode.
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="First Project" icon="folder-open" href="/first-project">
+    Build your first project from scratch with GSD
+  </Card>
+  
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts/milestones-slices-tasks">
+    Understand milestones, slices, and tasks
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/commands/overview">
+    Explore all GSD commands
+  </Card>
+  
+  <Card title="Multi-Terminal Workflow" icon="window-restore" href="/guides/multi-terminal-workflow">
+    Master the two-terminal pattern
+  </Card>
+</CardGroup>

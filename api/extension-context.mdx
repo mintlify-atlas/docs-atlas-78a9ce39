@@ -1,0 +1,195 @@
+---
+title: "ExtensionContext"
+description: "Access managers, state, UI, and session data from extension hooks"
+---
+
+## Overview
+
+`ExtensionContext` provides read-only access to Pi's runtime environment from within hooks. It's passed to all hook handlers and gives you visibility into the current session, UI state, model configuration, and system managers.
+
+<Note>
+  Context is **read-only**. Use `ExtensionAPI` methods to register capabilities or modify behavior.
+</Note>
+
+## Core Properties
+
+<ParamField path="model" type="Model | null">
+  The currently active model configuration, including:
+  - `id`: Model identifier (e.g. `"claude-sonnet-4-20250514"`)
+  - `contextWindow`: Maximum context window size
+  - `provider`: Provider name (e.g. `"anthropic"`)
+  
+  Returns `null` if no model is selected.
+</ParamField>
+
+<ParamField path="sessionManager" type="SessionManager">
+  Manages the conversation history. Use to:
+  - Read entries: `sessionManager.getEntries()`
+  - Access messages, tool calls, and tool results
+  - Query usage statistics from assistant messages
+  
+  <Tip>
+    Session entries include `type` field: `"message"`, `"tool_call"`, or `"tool_result"`.
+  </Tip>
+</ParamField>
+
+<ParamField path="modelRegistry" type="ModelRegistry">
+  Query available models:
+  ```typescript
+  const model = ctx.modelRegistry.find("anthropic", "claude-sonnet-4-20250514");
+  ```
+</ParamField>
+
+<ParamField path="hasUI" type="boolean">
+  Returns `true` if running in TUI mode, `false` in RPC/headless mode.
+  
+  Always check before calling `ctx.ui` methods:
+  ```typescript
+  if (ctx.hasUI) {
+    ctx.ui.notify("Extension loaded", "info");
+  }
+  ```
+</ParamField>
+
+## UI Manager
+
+<ParamField path="ui" type="UIManager">
+  Control the terminal interface. Available methods:
+
+  ### Notifications
+  ```typescript
+  ctx.ui.notify(message: string, level: "info" | "warning" | "error")
+  ```
+
+  ### Status Bar
+  ```typescript
+  ctx.ui.setStatus(key: string, value: string | undefined)
+  ```
+  Set `undefined` to clear.
+
+  ### Widgets
+  ```typescript
+  ctx.ui.setWidget(key: string, factory: WidgetFactory | undefined)
+  ```
+  Render custom UI above the input. See [Custom UI](/extensions/custom-extensions) for details.
+
+  ### Header & Footer
+  ```typescript
+  ctx.ui.setHeader(factory: HeaderFactory)
+  ctx.ui.setFooter(factory: FooterFactory)
+  ```
+
+  ### Custom Overlays
+  ```typescript
+  await ctx.ui.custom<T>(
+    componentFactory,
+    { overlay: true, overlayOptions: { width: "70%" } }
+  )
+  ```
+</ParamField>
+
+## Context Usage
+
+<ParamField path="getContextUsage()" type="() => ContextUsage | null">
+  Returns current context window utilization:
+  ```typescript
+  const usage = ctx.getContextUsage();
+  if (usage && usage.percent > 90) {
+    ctx.ui.notify("Context window nearly full", "warning");
+  }
+  ```
+  
+  Returns:
+  - `percent`: Percentage of context window used (0-100)
+  - `contextWindow`: Total context window size
+</ParamField>
+
+## Session Control
+
+<ParamField path="waitForIdle()" type="() => Promise<void>">
+  Wait for the agent to finish processing:
+  ```typescript
+  await ctx.waitForIdle();
+  ctx.ui.notify("Agent finished", "info");
+  ```
+</ParamField>
+
+<ParamField path="reload()" type="() => Promise<void>">
+  Reload the extension (useful after config changes):
+  ```typescript
+  await ctx.reload();
+  ```
+</ParamField>
+
+<ParamField path="newSession()" type="() => Promise<void>">
+  Start a fresh conversation session:
+  ```typescript
+  await ctx.newSession();
+  ```
+  <Warning>
+    This clears the conversation history. Save important state first.
+  </Warning>
+</ParamField>
+
+## Example: Reading Session Metrics
+
+```typescript
+export default function (pi: ExtensionAPI) {
+  pi.on("agent_end", async (event, ctx) => {
+    // Count tool calls in this session
+    let toolCallCount = 0;
+    for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type === "tool_call") toolCallCount++;
+    }
+
+    // Check context usage
+    const usage = ctx.getContextUsage();
+    const contextPct = usage?.percent ?? 0;
+
+    if (ctx.hasUI && toolCallCount > 50) {
+      ctx.ui.notify(
+        `Session used ${toolCallCount} tool calls and ${contextPct.toFixed(1)}% of context`,
+        "info"
+      );
+    }
+  });
+}
+```
+
+## GSD Extension Pattern
+
+From `src/resources/extensions/gsd/index.ts:220`:
+
+```typescript
+pi.on("before_agent_start", async (event, ctx: ExtensionContext) => {
+  // Check if we're in a GSD project
+  if (!existsSync(join(process.cwd(), ".gsd"))) return;
+
+  // Read project state
+  const loadedPreferences = loadEffectiveGSDPreferences();
+  
+  // Inject warnings into UI
+  if (report.warnings.length > 0) {
+    ctx.ui.notify(
+      `GSD: ${report.warnings.length} unresolved skills`,
+      "warning"
+    );
+  }
+
+  // Return modified system prompt
+  return {
+    systemPrompt: `${event.systemPrompt}\n\n${customContext}`,
+  };
+});
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="ExtensionAPI" icon="puzzle-piece" href="/api/extension-api">
+    Register tools, commands, and hooks
+  </Card>
+  <Card title="Hooks" icon="webhook" href="/api/hooks">
+    Hook lifecycle and event types
+  </Card>
+</CardGroup>

@@ -1,0 +1,144 @@
+---
+title: 'state.md'
+description: 'GSD state dashboard file format'
+icon: 'gauge'
+---
+
+## Overview
+
+`state.md` is the **dashboard file** that lives at `.gsd/state.md`. It's the first file you read in any GSD session to understand where you are and what to do next.
+
+<Warning>
+**Critical:** `state.md` is a **derived cache**, NOT the source of truth. It's a convenience dashboard that gets updated after every significant action.
+</Warning>
+
+## Sources of Truth
+
+The actual sources of truth are:
+
+- `roadmap.md` — which slices exist and which are done
+- `plan.md` — which tasks exist within a slice
+- `TNN-summary.md` — what happened during a task
+- `summary.md` (slice/milestone) — compressed outcomes
+
+## File Format
+
+```markdown
+# GSD State
+
+**Active Milestone:** M001 — Title
+**Active Slice:** S02 — Slice Title
+**Active Task:** T01 — Task Title
+**Phase:** Executing
+
+## Recent Decisions
+- Decision 1
+- Decision 2
+
+## Blockers
+- None (or list blockers)
+
+## Next Action
+Exact next thing to do.
+```
+
+## Fields
+
+<ResponseField name="Active Milestone" type="string" required>
+  The current milestone ID and title in format `M001 — Title`
+</ResponseField>
+
+<ResponseField name="Active Slice" type="string">
+  The current slice ID and title in format `S02 — Slice Title`
+</ResponseField>
+
+<ResponseField name="Active Task" type="string">
+  The current task ID and title in format `T01 — Task Title`
+</ResponseField>
+
+<ResponseField name="Phase" type="string" required>
+  Current phase of work: `Discuss`, `Research`, `Plan`, `Executing`, `Verify`, `Summarize`, or `Advance`
+</ResponseField>
+
+<ResponseField name="Recent Decisions" type="list">
+  Last 3-5 key decisions made. Keep this short and relevant.
+</ResponseField>
+
+<ResponseField name="Blockers" type="list">
+  Current blockers preventing progress. Write "None" if there are no blockers.
+</ResponseField>
+
+<ResponseField name="Next Action" type="string" required>
+  **Most important field.** The exact next thing to do when resuming work. Must be specific and actionable, not vague.
+</ResponseField>
+
+## When to Update
+
+Update `state.md` after every significant action:
+
+<CardGroup cols={2}>
+  <Card title="Task Transitions" icon="list-check">
+    When starting a new task or completing one
+  </Card>
+  <Card title="Slice Transitions" icon="layer-group">
+    When marking a slice complete and advancing
+  </Card>
+  <Card title="Blockers" icon="triangle-exclamation">
+    When encountering or resolving a blocker
+  </Card>
+  <Card title="Key Decisions" icon="scale-balanced">
+    When making architectural or pattern decisions
+  </Card>
+</CardGroup>
+
+## Update Semantics
+
+- **Full rewrite:** The entire file is regenerated on each update
+- **Frequency:** After every phase transition or significant action
+- **Fresh sessions:** Always read this file first to understand "what's next"
+- **Between sessions:** This file bridges work across sessions
+
+## Reconciliation Rules
+
+If `state.md` disagrees with source files, **pause and surface to the user**:
+
+- Roadmap says slice done but task summaries missing → inconsistency
+- Task marked done but no summary → treat as incomplete
+- Continue file exists for completed task → delete continue file
+- State points to nonexistent slice/task → rebuild state from files
+
+## Example
+
+```markdown
+# GSD State
+
+**Active Milestone:** M001 — Core Extension Scaffold
+**Active Slice:** S02 — Command Registration
+**Active Task:** T03 — Command Router
+**Phase:** Executing
+
+## Recent Decisions
+- Using Zod for validation (D001)
+- HTTP-only cookies for session storage (D002)
+- API versioning via URL prefix /v1 (D003)
+
+## Blockers
+- None
+
+## Next Action
+Implement command router in src/router.ts that dispatches to slice-specific handlers.
+```
+
+## Related Files
+
+<CardGroup cols={3}>
+  <Card title="roadmap.md" href="/api/roadmap-md" icon="map">
+    Source of truth for slices
+  </Card>
+  <Card title="plan.md" href="/api/plan-md" icon="clipboard-list">
+    Source of truth for tasks
+  </Card>
+  <Card title="continue.md" href="/api/continue-md" icon="play">
+    Resume point for interrupted work
+  </Card>
+</CardGroup>

@@ -1,0 +1,302 @@
+---
+title: Step Mode
+description: Interactive wizard for advancing through work one unit at a time
+icon: shoe-prints
+---
+
+Step mode is GSD's **interactive workflow**. It executes one unit of work at a time, pauses between each with a wizard showing what completed and what's next, then waits for you to advance manually.
+
+## Commands
+
+<ParamField path="/gsd" type="command">
+  Default entry point — starts step mode when run with no arguments
+</ParamField>
+
+<ParamField path="/gsd next" type="command">
+  Explicit alias for step mode (identical behavior to `/gsd`)
+</ParamField>
+
+## How It Works
+
+Step mode uses the **same state machine as auto mode**, but pauses between units. You stay in the loop, review output, and decide when to continue.
+
+### State-Driven Navigation
+
+Step mode reads `.gsd/` files to determine what to do next:
+
+```
+┌─────────────────────────────────────┐
+│  Read disk state                    │
+│  (.gsd/STATE.md, roadmap, plans)    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Determine next unit                │
+│  (research, plan, execute, complete) │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Execute unit in fresh session      │
+│  (focused context window)           │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Show wizard with results           │
+│  (what completed, what's next)      │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+         User advances
+```
+
+### The Wizard Interface
+
+After each unit completes, the wizard shows:
+
+- **What just finished** — unit type, ID, duration, cost
+- **What's next** — next unit type and estimated scope
+- **Action buttons** — Continue, Switch to auto, Stop
+
+#### Example: Planning Phase
+
+```
+✓ Plan complete: S01 — Core data model and types
+
+  Duration: 2m 34s
+  Cost: $0.42
+  Tasks created: 3
+
+Next: Execute T01 — Implement User and Project types
+
+  [Continue]  [Switch to auto]  [Stop]
+```
+
+## First Launch
+
+With no `.gsd/` directory, step mode starts the **discussion flow**:
+
+```bash
+gsd
+/gsd
+```
+
+**Discussion captures:**
+
+1. **Vision** — What you're building and why
+2. **Scope reflection** — Size estimate (milestones, slices)
+3. **Deep Q&A** — Experience, unknowns, external systems
+4. **Confirmation** — Scope check before planning
+
+See [/gsd discuss](/commands/discuss) for details on the discussion flow.
+
+## Typical Session Flow
+
+### 1. Start Step Mode
+
+```bash
+gsd
+/gsd
+```
+
+### 2. GSD Determines Next Action
+
+Based on disk state:
+
+- **No roadmap** → Research the milestone
+- **Roadmap exists, no slice plan** → Plan the next slice
+- **Slice planned, tasks pending** → Execute the next task
+- **All tasks done** → Complete the slice
+- **All slices done** → Complete the milestone and reassess roadmap
+
+### 3. Execute One Unit
+
+GSD creates a **fresh agent session** with:
+
+- Focused prompt for the unit type
+- Pre-inlined context (plans, summaries, decisions)
+- Only relevant files loaded
+
+### 4. Review Output
+
+The wizard shows:
+
+- Unit completion summary
+- Files created or modified
+- Cost and token usage
+- Next unit preview
+
+### 5. Advance or Stop
+
+Choose:
+
+- **Continue** → Execute the next unit
+- **Switch to auto** → Let GSD finish the milestone autonomously
+- **Stop** → Exit step mode (state is preserved)
+
+## Switching to Auto Mode
+
+At any wizard pause, you can switch to auto mode:
+
+```
+✓ Task complete: T02 — User authentication middleware
+
+Next: Execute T03 — Session management
+
+  [Continue]  [Switch to auto]  [Stop]
+```
+
+Click **Switch to auto** or type `/gsd auto` to continue autonomously.
+
+## When to Use Step Mode
+
+<CardGroup cols={2}>
+  <Card title="Learning" icon="graduation-cap">
+    Understand how GSD breaks down work
+  </Card>
+  <Card title="High-Risk Work" icon="shield">
+    Review each task before proceeding
+  </Card>
+  <Card title="Debugging" icon="bug">
+    Inspect output after each unit
+  </Card>
+  <Card title="Onboarding" icon="hand-wave">
+    Build confidence before using auto mode
+  </Card>
+</CardGroup>
+
+## Step Mode vs Auto Mode
+
+| Aspect | Step Mode | Auto Mode |
+|--------|-----------|------------|
+| **Control** | Manual advance | Fully autonomous |
+| **Supervision** | You review each unit | GSD supervises itself |
+| **Speed** | Pauses between units | Continuous execution |
+| **Intervention** | After every unit | Via escape hatch (Escape key) |
+| **Use Case** | Learning, high-risk work | Production builds, trusted workflows |
+
+## Resume After Stop
+
+Step mode preserves state when stopped. Resume exactly where you left off:
+
+```bash
+# Session 1
+/gsd next
+# Complete T01, T02, then stop
+
+# Later — Session 2
+/gsd next
+# Resumes at T03
+```
+
+## Cost Tracking
+
+Every unit's cost is tracked and displayed in the wizard:
+
+```
+✓ Task complete: T01 — Core types
+
+  Duration: 1m 23s
+  Cost: $0.18
+  Tokens: 12,450 in / 3,890 out
+```
+
+Run `/gsd status` to see cumulative cost across all units.
+
+## Verbose Mode
+
+See detailed execution logs:
+
+```bash
+/gsd next --verbose
+```
+
+Shows:
+
+- Prompt construction details
+- File injection list
+- State transitions
+- Timeout and supervision events
+
+## Fresh Context Per Unit
+
+Every unit gets a **clean 200k-token context window**. No accumulated garbage. No "I'll be more concise now."
+
+**What gets pre-loaded:**
+
+- Task plan (if executing a task)
+- Slice plan (if within a slice)
+- Prior task summaries (dependencies)
+- Roadmap excerpt (current milestone)
+- Decisions register
+- Relevant files only
+
+## Error Handling
+
+If a unit fails (LLM doesn't produce the expected artifact):
+
+1. **First failure** → Retry once with deep diagnostic
+2. **Second failure** → Stop and show the exact file expected
+3. **Manual recovery** → Fix the issue, then `/gsd next` resumes
+
+See [/gsd doctor](/commands/doctor) for integrity validation.
+
+## Keyboard Shortcuts
+
+During step mode:
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Continue to next unit |
+| `Escape` | Stop step mode |
+| `Ctrl+Alt+G` | Toggle status dashboard |
+
+## Terminal Output Example
+
+```
+$ gsd
+/gsd next
+
+🔍 Research: M001 — Payment integrations
+
+  Scouting codebase...
+  Checking library docs (Stripe, PayPal)...
+  Searching for integration patterns...
+
+✓ Research complete (3m 12s, $0.67)
+
+  Key findings:
+  - Existing auth middleware can be reused
+  - Stripe SDK v12 has breaking changes (need upgrade path)
+  - No webhook handler yet (add to slice plan)
+
+Next: Plan S01 — Stripe integration with webhook handling
+
+  [Continue]  [Switch to auto]  [Stop]
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Let GSD complete milestones autonomously
+  </Card>
+  <Card title="Status Dashboard" icon="gauge" href="/commands/status-queue">
+    Monitor progress and cost
+  </Card>
+  <Card title="Discussion" icon="comments" href="/commands/discuss">
+    Capture decisions during execution
+  </Card>
+  <Card title="Doctor" icon="stethoscope" href="/commands/doctor">
+    Validate project integrity
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Start your first project: `/gsd`
+2. Complete a slice in step mode to understand the flow
+3. When comfortable, switch to auto mode: `/gsd auto`
+4. Use `/gsd status` to monitor progress

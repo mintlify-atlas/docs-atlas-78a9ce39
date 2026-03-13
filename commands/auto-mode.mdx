@@ -1,0 +1,456 @@
+---
+title: Auto Mode
+description: Autonomous execution — research, plan, execute, commit, and repeat
+icon: forward-fast
+---
+
+Auto mode is **the main event**. Run it, walk away, come back to built software with clean git history.
+
+## Command
+
+<ParamField path="/gsd auto" type="command">
+  Start autonomous mode — completes milestones without human intervention
+</ParamField>
+
+<ParamField path="/gsd auto --verbose" type="command">
+  Enable detailed execution logs (prompt construction, state transitions, supervision events)
+</ParamField>
+
+<ParamField path="/gsd stop" type="command">
+  Stop auto mode gracefully (preserves state, shows cost summary)
+</ParamField>
+
+## How It Works
+
+Auto mode is a **state machine driven by files on disk**. It reads `.gsd/STATE.md`, determines the next unit of work, creates a fresh agent session, injects a focused prompt with pre-inlined context, and lets the LLM execute.
+
+When the LLM finishes, auto mode reads disk state again and dispatches the next unit.
+
+### The Loop
+
+```
+┌─────────────────────────────────────┐
+│  Read .gsd/STATE.md                 │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Determine next unit                │
+│  (research, plan, execute, complete) │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Create fresh agent session         │
+│  (200k context, focused prompt)     │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Execute unit                       │
+│  (LLM reads plans, writes artifacts) │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Validate output                    │
+│  (expected files exist)             │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Commit to slice branch             │
+│  (atomic commits per task)          │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+         Loop until done
+```
+
+## What Happens Under the Hood
+
+### 1. Fresh Session Per Unit
+
+Every task, research phase, and planning step gets a **clean 200k-token context window**. No accumulated garbage. No "I'll be more concise now."
+
+### 2. Context Pre-Loading
+
+The dispatch prompt includes inlined:
+
+- Task plans with must-haves
+- Slice plans with acceptance criteria
+- Prior task summaries (dependencies)
+- Dependency summaries (from other slices)
+- Roadmap excerpts (current milestone)
+- Decisions register (architectural choices)
+
+The LLM starts with everything it needs instead of spending tool calls reading files.
+
+### 3. Git Branch-Per-Slice
+
+Each slice gets its own branch (`gsd/M001/S01`). Tasks commit atomically on the branch. When the slice completes, it's **squash-merged to main** as one clean commit.
+
+```
+main:
+  feat(M001/S02): API endpoints and middleware
+  feat(M001/S01): data model and type system
+
+gsd/M001/S01 (deleted after merge):
+  feat(S01/T03): file writer with round-trip fidelity
+  feat(S01/T02): markdown parser for plan files
+  feat(S01/T01): core types and interfaces
+```
+
+### 4. Crash Recovery
+
+A lock file tracks the current unit. If the session dies:
+
+1. Next `/gsd auto` reads the surviving session file
+2. Synthesizes a recovery briefing from every tool call that made it to disk
+3. Resumes with full context
+
+### 5. Stuck Detection
+
+If the same unit dispatches twice (the LLM didn't produce the expected artifact):
+
+1. **First retry** → Retry once with a deep diagnostic (shows prior attempt summary)
+2. **Second failure** → Stop auto mode with the exact file it expected
+
+This catches infinite loops before they burn budget.
+
+### 6. Timeout Supervision
+
+Auto mode watches for stalls:
+
+- **Soft timeout** (20 min default) → Warns the LLM to wrap up
+- **Idle watchdog** (10 min default) → Detects when the LLM stops making progress
+- **Hard timeout** (30 min default) → Pauses auto mode for manual inspection
+
+**Recovery steering:** When a timeout triggers, GSD nudges the LLM to finish durable output (write summaries, commit progress) before giving up.
+
+### 7. Cost Tracking
+
+Every unit's token usage and cost is captured, broken down by:
+
+- Phase (research, planning, execution, completion)
+- Slice
+- Model
+
+The dashboard shows running totals and projections. Budget ceilings can pause auto mode before overspending.
+
+### 8. Adaptive Replanning
+
+After each slice completes, the roadmap is **reassessed**. If the work revealed new information that changes the plan:
+
+- Slices are reordered
+- New slices are added
+- Infeasible slices are deferred
+
+The reassessment runs before continuing to the next slice.
+
+### 9. Escape Hatch
+
+Press `Escape` to pause. The conversation is preserved. Interact with the agent, inspect what happened, or just `/gsd auto` to resume from disk state.
+
+## Starting Auto Mode
+
+### From Scratch
+
+With no `.gsd/` directory, auto mode starts with the discussion flow:
+
+```bash
+gsd
+/gsd auto
+```
+
+**Flow:**
+
+1. Discussion → Captures vision
+2. Research → Scouts codebase and libraries
+3. Planning → Creates milestone roadmap
+4. Execution → Researches, plans, and executes each slice
+5. Completion → Writes summaries, commits, reassesses roadmap
+6. Repeat → Until milestone is complete
+
+### Resume Existing Work
+
+Auto mode picks up where step mode left off:
+
+```bash
+# Use step mode to plan M001
+/gsd next
+# Stop after planning S01
+
+# Switch to auto mode
+/gsd auto
+# Executes T01, T02, T03, completes S01, plans S02, ...
+```
+
+## Two-Terminal Workflow
+
+The real power: **run auto mode in one terminal, steer from another**.
+
+**Terminal 1 — Let it build:**
+
+```bash
+gsd
+/gsd auto
+```
+
+**Terminal 2 — Steer while it works:**
+
+```bash
+gsd
+/gsd discuss    # talk through architecture decisions
+/gsd status     # check progress
+/gsd queue      # queue the next milestone
+```
+
+Both terminals read and write the same `.gsd/` files on disk. Your decisions in terminal 2 are picked up automatically at the next phase boundary — **no need to stop auto mode**.
+
+## Pausing and Resuming
+
+### Manual Pause (Escape Key)
+
+Press `Escape` during auto mode:
+
+```
+[Auto mode running...]
+<Escape>
+
+Auto mode paused. Context preserved.
+
+Resume:
+  /gsd auto
+
+Inspect:
+  /gsd status
+  /gsd doctor
+```
+
+**What's preserved:**
+
+- Current unit state
+- Completed unit history
+- Cost and token totals
+- Git branch state
+
+**What you can do while paused:**
+
+- Interact with the agent in the same session
+- Inspect files and git state
+- Run `/gsd status` or `/gsd doctor`
+- Resume with `/gsd auto`
+
+### Timeout Pause
+
+If a unit exceeds the hard timeout (30 min default), auto mode pauses automatically:
+
+```
+⚠ Hard timeout reached (30 min)
+
+Auto mode paused. Inspect output:
+
+  .gsd/milestones/M001/slices/S01/tasks/T02-PLAN.md
+
+Resume:
+  /gsd auto
+```
+
+### Budget Ceiling Pause
+
+If total cost reaches the budget ceiling (configured in preferences):
+
+```
+⚠ Budget ceiling reached ($50.00)
+
+Auto mode paused. Current cost: $50.12
+
+To continue, increase the ceiling in preferences:
+  /gsd prefs
+
+Or resume without a ceiling:
+  /gsd auto
+```
+
+## Progress Widget
+
+During auto mode, a compact widget shows:
+
+```
+🤖 auto — M001/S02/T01 — execute — 4m 23s — $1.24 — 45k tokens — claude-sonnet-4-6
+```
+
+**Fields:**
+
+- **Mode** — `auto` or `paused`
+- **Location** — Current milestone/slice/task
+- **Phase** — `research`, `plan`, `execute`, `complete`, `reassess`
+- **Elapsed** — Time since unit started
+- **Cost** — Running session cost
+- **Tokens** — Running session token count
+- **Model** — Current model in use
+
+## Dashboard (Ctrl+Alt+G)
+
+Toggle the full dashboard overlay:
+
+```
+╭─ GSD Status ──────────────────────────────────╮
+│                                               │
+│  M001: Payment integrations                   │
+│  ████████████████░░░░░░░░  60% (3/5 slices)   │
+│                                               │
+│  Current: S03/T02 — Webhook signature verify  │
+│  Phase: execute                               │
+│  Elapsed: 12m 34s                             │
+│                                               │
+│  Session cost: $4.23 · 234k tokens            │
+│  Project total: $18.67 · 1.2M tokens          │
+│                                               │
+│  Completed:                                   │
+│    S01 — Stripe integration ($3.45, 6m 12s)   │
+│    S02 — PayPal integration ($2.34, 4m 56s)   │
+│    S03/T01 — Webhook receiver ($0.89, 2m 11s) │
+│                                               │
+╰───────────────────────────────────────────────╯
+```
+
+See [/gsd status](/commands/status-queue) for details.
+
+## Supervision Tuning
+
+Configure timeout thresholds in preferences:
+
+```yaml
+# ~/.gsd/preferences.md or .gsd/preferences.md
+---
+auto_supervisor:
+  soft_timeout_minutes: 20  # Warn LLM to wrap up
+  idle_timeout_minutes: 10  # Detect stalls
+  hard_timeout_minutes: 30  # Pause auto mode
+---
+```
+
+See [/gsd prefs](/commands/preferences) for all options.
+
+## When to Use Auto Mode
+
+<CardGroup cols={2}>
+  <Card title="Production Builds" icon="industry">
+    Complete milestones without babysitting
+  </Card>
+  <Card title="Trusted Workflows" icon="shield-check">
+    After validating with step mode
+  </Card>
+  <Card title="Overnight Runs" icon="moon">
+    Let it work while you sleep
+  </Card>
+  <Card title="Parallel Work" icon="diagram-project">
+    Use worktrees for multiple milestones
+  </Card>
+</CardGroup>
+
+## Cost Projections
+
+After the first slice completes, GSD estimates total milestone cost:
+
+```
+✓ S01 complete — $3.45
+
+Projected milestone cost: $17.25 (5 slices remaining @ $3.45 avg)
+```
+
+This helps you decide whether to let it run or tune model selection.
+
+## Model Selection Per Phase
+
+Use different models for different phases:
+
+```yaml
+# ~/.gsd/preferences.md
+---
+models:
+  research: openrouter/deepseek/deepseek-r1  # Fast, cheap
+  planning: claude-opus-4-6                  # High quality
+  execution: claude-sonnet-4-6               # Balanced
+  completion: claude-sonnet-4-6              # Balanced
+---
+```
+
+See [/gsd prefs](/commands/preferences) for details.
+
+## Error Recovery
+
+### Stuck Loop
+
+If the same unit dispatches 3 times:
+
+```
+✖ Stuck loop detected: T02 failed 3 times
+
+Expected file not found:
+  .gsd/milestones/M001/slices/S01/tasks/T02-SUMMARY.md
+
+Auto mode stopped. Inspect and fix manually:
+  /gsd doctor
+
+Resume after fixing:
+  /gsd auto
+```
+
+### Timeout Recovery
+
+When a timeout triggers, GSD nudges the LLM to finish durable output:
+
+```
+⚠ Soft timeout (20 min) — wrapping up...
+
+  The LLM is being asked to:
+  - Write a task summary
+  - Commit progress
+  - Exit cleanly
+
+If successful, auto mode continues to the next unit.
+If not, you'll see a hard timeout pause.
+```
+
+## Verbose Mode
+
+See detailed execution logs:
+
+```bash
+/gsd auto --verbose
+```
+
+**Shows:**
+
+- Prompt construction details
+- File injection list
+- State transitions (unit boundaries)
+- Timeout and supervision events
+- Cost breakdown per unit
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Step Mode" icon="shoe-prints" href="/commands/step-mode">
+    Interactive workflow for learning and high-risk work
+  </Card>
+  <Card title="Status Dashboard" icon="gauge" href="/commands/status-queue">
+    Monitor progress and cost
+  </Card>
+  <Card title="Discussion" icon="comments" href="/commands/discuss">
+    Capture decisions during auto mode
+  </Card>
+  <Card title="Preferences" icon="sliders" href="/commands/preferences">
+    Configure models, timeouts, and budgets
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Validate your project with step mode first
+2. When comfortable, try auto mode for one slice
+3. Use the two-terminal workflow to steer while building
+4. Configure model selection and budgets in preferences

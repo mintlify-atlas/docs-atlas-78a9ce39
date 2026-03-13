@@ -1,0 +1,366 @@
+---
+title: Subagents
+description: Scout, Researcher, and Worker agents for delegated work with isolated context windows
+---
+
+Subagents are specialized agents that run in isolated context windows, separate from the main conversation. They handle self-contained tasks and return structured output to the parent agent.
+
+## Why Subagents?
+
+The main agent's context window accumulates everything: task plans, file contents, prior conversations, diagnostics. Subagents solve three problems:
+
+1. **Context pollution** — Scouting the codebase shouldn't burn 50k tokens in the execution context
+2. **Specialization** — Different tasks need different tool access and instructions
+3. **Parallelization** — Multiple subagents can run simultaneously
+
+## Bundled Agents
+
+GSD ships with three agents in `~/.gsd/agent/agents/`:
+
+<CardGroup cols={3}>
+  <Card title="Scout" icon="binoculars">
+    Fast codebase recon. Returns compressed context for handoff.
+  </Card>
+  <Card title="Researcher" icon="magnifying-glass">
+    Web research. Finds and synthesizes current information.
+  </Card>
+  <Card title="Worker" icon="hammer">
+    General-purpose execution with full tool access.
+  </Card>
+</CardGroup>
+
+## Scout
+
+**Purpose:** Fast codebase reconnaissance that returns compressed findings without polluting the main context.
+
+**Tools:** `read`, `grep`, `find`, `ls`, `bash`
+
+**When to use:**
+- Before implementing: "Scout the authentication system"
+- Before refactoring: "Scout how errors are currently handled"
+- During planning: "Scout existing API patterns"
+
+**Thoroughness levels** (inferred from task):
+- **Quick** — Targeted lookups, key files only
+- **Medium** — Follow imports, read critical sections
+- **Thorough** — Trace all dependencies, check tests/types
+
+**Output format:**
+
+```markdown
+## Files Retrieved
+
+1. `path/to/file.ts` (lines 10-50) - Description
+2. `path/to/other.ts` (lines 100-150) - Description
+
+## Key Code
+
+Critical types, interfaces, or functions:
+
+```typescript
+interface Example {
+  // actual code from the files
+}
+```
+
+## Architecture
+
+Brief explanation of how the pieces connect.
+
+## Start Here
+
+Which file to look at first and why.
+```
+
+**Example usage:**
+
+```typescript
+// From the main agent
+const findings = await subagent({
+  agent: "scout",
+  task: "Scout the authentication system. Focus on token validation and session management."
+});
+
+// Scout returns compressed findings
+// Main agent can now implement without re-reading everything
+```
+
+## Researcher
+
+**Purpose:** Web research that finds current information and synthesizes it into a structured report.
+
+**Tools:** `web_search`, `bash`
+
+**When to use:**
+- Library selection: "Research Python async HTTP clients"
+- API changes: "Research breaking changes in React 18"
+- Best practices: "Research current Node.js project structure patterns"
+
+**Output format:**
+
+```markdown
+## Summary
+
+Brief 2-3 sentence overview.
+
+## Key Findings
+
+- Finding 1 ([Source 1](https://...))
+- Finding 2 ([Source 2](https://...))
+- Finding 3 ([Source 3](https://...))
+
+## Sources
+
+1. [Title](URL)
+2. [Title](URL)
+```
+
+**Example usage:**
+
+```typescript
+// From the main agent
+const research = await subagent({
+  agent: "researcher",
+  task: "Research best practices for TypeScript monorepo setup in 2024. Focus on build tools and package management."
+});
+
+// Researcher returns synthesized findings with citations
+```
+
+## Worker
+
+**Purpose:** General-purpose execution with full tool access and an isolated context window.
+
+**Tools:** All tools (read, write, edit, bash, etc.)
+
+**When to use:**
+- Isolated implementation: "Implement the user profile API endpoints"
+- File processing: "Parse all config files and extract database URLs"
+- Self-contained fixes: "Fix the type errors in the user module"
+
+**Output format:**
+
+```markdown
+## Completed
+
+What was done.
+
+## Files Changed
+
+- `path/to/file.ts` - what changed
+
+## Notes (if any)
+
+Anything the main agent should know.
+```
+
+**Example usage:**
+
+```typescript
+// From the main agent
+const result = await subagent({
+  agent: "worker",
+  task: "Implement the user profile API endpoints according to the spec in docs/api.md. Include input validation and error handling."
+});
+
+// Worker returns summary of completed work
+```
+
+## Execution Modes
+
+The `subagent` tool supports three modes:
+
+### Single
+
+One agent, one task:
+
+```typescript
+subagent({
+  agent: "scout",
+  task: "Scout the database layer"
+})
+```
+
+### Parallel
+
+Multiple agents running simultaneously (max 8 tasks, max 4 concurrent):
+
+```typescript
+subagent({
+  tasks: [
+    { agent: "scout", task: "Scout the API routes" },
+    { agent: "scout", task: "Scout the middleware" },
+    { agent: "researcher", task: "Research Express.js security best practices" }
+  ]
+})
+```
+
+Failed tasks are automatically retried once.
+
+### Chain
+
+Sequential pipeline where each step receives the previous output via `{previous}`:
+
+```typescript
+subagent({
+  chain: [
+    { agent: "scout", task: "Scout the authentication system" },
+    { agent: "worker", task: "Fix the issues found in: {previous}" },
+    { agent: "worker", task: "Write tests for the fixes in: {previous}" }
+  ]
+})
+```
+
+Chain stops on first error.
+
+## Agent Discovery
+
+Subagents are discovered from three locations:
+
+| Source | Path | Scope |
+|--------|------|-------|
+| **Bundled** | `~/.gsd/agent/agents/` | scout, researcher, worker |
+| **User** | `~/.pi/agents/` | Your personal agents |
+| **Project** | `.gsd/agents/` | Project-specific agents |
+
+**Agent scope parameter:**
+```typescript
+subagent({
+  agent: "custom-agent",
+  task: "...",
+  agentScope: "project" // "user", "project", or "both" (default)
+})
+```
+
+**List available agents:**
+```bash
+/subagent
+```
+
+## Agent Definition Format
+
+Agents are markdown files with YAML frontmatter:
+
+```markdown
+---
+name: scout
+description: Fast codebase recon
+tools: read, grep, find, ls, bash
+model: claude-sonnet-4-6  # optional
+---
+
+You are a scout. Your purpose is...
+
+## Strategy
+
+1. grep/find to locate relevant code
+2. Read key sections (not entire files)
+...
+```
+
+**Frontmatter fields:**
+- `name` (required) — Agent identifier
+- `description` (required) — What the agent does
+- `tools` (optional) — Comma-separated tool names (default: all tools)
+- `model` (optional) — Override default model
+
+**Body:** System prompt that defines the agent's behavior.
+
+## When to Delegate vs Do Inline
+
+**Use subagents when:**
+- Task is self-contained (clear input/output boundary)
+- Context accumulation is a concern (scouting, research)
+- Task benefits from specialization (narrow tool set)
+- Parallelization is possible (independent tasks)
+
+**Do inline when:**
+- Task requires main context (continuation of current work)
+- Frequent back-and-forth needed (iterative refinement)
+- Task is trivial (small file edits, quick checks)
+- Overhead outweighs benefit (very short tasks)
+
+## Return Value Patterns
+
+Subagents always return text. Structure the output so the parent agent can extract what it needs:
+
+**Good:**
+```markdown
+## Files Changed
+- `src/auth.ts` - added token validation
+- `src/middleware.ts` - added auth middleware
+
+## Next Steps
+The tests in `tests/auth.test.ts` need updating for the new validation logic.
+```
+
+**Bad:**
+```
+I changed a bunch of files and it's all working now.
+```
+
+The parent agent has no visibility into the subagent's context. Be explicit about what happened.
+
+## Cost and Token Usage
+
+Each subagent invocation:
+- Starts a new `pi` process
+- Gets a fresh 200k+ token context window
+- Accumulates usage separately from the main session
+- Appears in the main session's usage stats
+
+Subagent output is returned as text and enters the main context. Keep output concise — comprehensive but not verbose.
+
+## Custom Subagents
+
+Create project-specific agents in `.gsd/agents/`:
+
+```bash
+# Create agent file
+cat > .gsd/agents/reviewer.md << 'EOF'
+---
+name: reviewer
+description: Code review focused on type safety and error handling
+tools: read, grep, bash
+---
+
+You are a code reviewer. Focus on:
+
+1. Type safety (any usage, unsafe casts)
+2. Error handling (uncaught promises, missing try/catch)
+3. Edge cases (null checks, array bounds)
+
+## Output Format
+
+### Issues Found
+
+- `file.ts:42` - Description of issue
+
+### Recommendations
+
+Suggested improvements.
+EOF
+
+# Use it
+subagent({
+  agent: "reviewer",
+  task: "Review src/api/ for type safety issues",
+  agentScope: "project"
+})
+```
+
+Project agents are version-controlled with the repo. Team members get them automatically.
+
+## Debugging Subagents
+
+Subagent sessions are saved in `~/.gsd/sessions/`. Check stderr for process errors:
+
+```bash
+# Find the most recent subagent session
+ls -lt ~/.gsd/sessions/ | head -n 5
+
+# Read the session file
+cat ~/.gsd/sessions/<session-id>.json | jq .
+```
+
+The session file contains all messages, tool calls, and usage stats.

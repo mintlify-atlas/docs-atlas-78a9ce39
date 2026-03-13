@@ -1,0 +1,489 @@
+---
+title: Migrate from v1
+description: Convert legacy .planning directories to GSD-2 format
+icon: right-left
+---
+
+`/gsd migrate` converts projects from the original GSD (v1) `.planning/` format to GSD-2's `.gsd/` format.
+
+## Command
+
+<ParamField path="/gsd migrate" type="command">
+  Migrate `.planning/` directory in current working directory
+</ParamField>
+
+<ParamField path="/gsd migrate <path>" type="command">
+  Migrate `.planning/` directory at specified path
+</ParamField>
+
+## What Gets Converted
+
+The migration tool reads your v1 project structure and maps it to v2:
+
+| v1 Artifact | v2 Artifact | Notes |
+|-------------|-------------|-------|
+| `PROJECT.md` | `.gsd/PROJECT.md` | Living project description |
+| `ROADMAP.md` | `.gsd/M001-ROADMAP.md` | Milestone-scoped roadmaps |
+| `REQUIREMENTS.md` | `.gsd/REQUIREMENTS.md` | Requirement states preserved |
+| `phases/<phase>/` | `.gsd/milestones/M001/slices/S0X/` | Phases become slices |
+| `phases/<phase>/plan.md` | `.gsd/.../S0X-PLAN.md` | Slice plans with task breakdown |
+| `phases/<phase>/summary.md` | `.gsd/.../S0X-SUMMARY.md` | Completion summaries |
+| `research/` | `.gsd/milestones/M001/M001-RESEARCH.md` | Consolidated research files |
+| Decisions (in various files) | `.gsd/DECISIONS.md` | Centralized decision register |
+
+## Migration Flow
+
+```
+┌─────────────────────────────────────┐
+│  Validate .planning/ directory         │
+│  (check for required files)             │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Parse v1 structure                     │
+│  (phases, plans, summaries)             │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Transform to v2 structure              │
+│  (milestones, slices, tasks)            │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Show preview with stats                │
+│  (milestones, slices, tasks, cost)      │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+         Confirm or cancel
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Write .gsd/ directory                  │
+│  (all files, preserve completion state) │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+    Optional: Agent review
+```
+
+## Basic Usage
+
+### Migrate Current Directory
+
+```bash
+cd ~/projects/my-old-project
+gsd
+/gsd migrate
+```
+
+GSD looks for `.planning/` in the current working directory.
+
+### Migrate Specific Path
+
+```bash
+gsd
+/gsd migrate ~/projects/my-old-project
+```
+
+GSD resolves the path and looks for `.planning/` inside it.
+
+### Tilde Expansion
+
+```bash
+/gsd migrate ~/projects/payment-gateway
+# Expands to /Users/you/projects/payment-gateway/.planning
+```
+
+## Validation
+
+Before migrating, GSD validates the source directory:
+
+### Fatal Issues (Block Migration)
+
+- **Missing `.planning/` directory** — Not a v1 project
+- **No `PROJECT.md` or `ROADMAP.md`** — Required files missing
+- **Malformed phase numbers** — Phases must follow `01-`, `02-`, etc. or `1.0`, `1.1` naming
+
+### Warnings (Migration Proceeds)
+
+- **Missing `requirements.md`** — Defaults to empty requirements
+- **Phase without plan** — Phase directory exists but no `plan.md` (treated as pending)
+- **Phase with summary but no plan** — Infers completion from summary
+- **Duplicate phase numbers** — If milestones use `<details>` blocks, duplicate phase numbers across milestones are allowed
+
+## Supported v1 Variants
+
+The migration tool handles multiple v1 formats:
+
+### Phase Numbering
+
+- **Decimal:** `1.0-setup`, `1.1-database`, `2.0-api`
+- **Zero-padded:** `01-setup`, `02-database`, `03-api`
+- **Milestone-scoped:** `01-setup` (in M001), `01-setup` (in M002) — different slices
+
+### Roadmap Formats
+
+- **Flat list:** All phases in one milestone
+- **Milestone-sectioned:** Roadmap with `## Milestone 1`, `## Milestone 2` headers
+- **Details blocks:** Roadmap using `<details><summary>Milestone X</summary>...</details>` for collapsible sections
+
+### Completion Markers
+
+- **`[x]` checkboxes** — Standard markdown checkboxes in roadmap or plan
+- **Bold phase names** — `**Phase 1.0: Setup**` (treated as complete)
+- **Presence of summary** — If `summary.md` exists, phase is done
+
+## Preview Confirmation
+
+Before writing, GSD shows a preview:
+
+```
+┌─ Migration Preview ───────────────────────────────────────────╮
+│                                                                 │
+│  Source: ~/projects/payment-gateway/.planning                   │
+│  Target: ~/projects/payment-gateway/.gsd                        │
+│                                                                 │
+│  Milestones: 1                                                  │
+│  Slices: 8 (5 done — 62%)                                     │
+│  Tasks: 24 (15 done — 62%)                                    │
+│  Requirements: 12 (8 validated, 3 active, 1 deferred)           │
+│                                                                 │
+│  ⚠️  A .gsd directory already exists — it will be overwritten. │
+│                                                                 │
+│  [Write .gsd/]  [Cancel]  [Review first]                        │
+│                                                                 │
+╰───────────────────────────────────────────────────────────────╯
+```
+
+### Overwrite Warning
+
+If `.gsd/` already exists in the target directory:
+
+```
+⚠️  A .gsd directory already exists — it will be overwritten.
+```
+
+The migration **replaces** the entire `.gsd/` directory. Back up manually if needed.
+
+## Agent Review (Optional)
+
+After writing, GSD offers an **agent-driven review**:
+
+```
+✓ Migration complete.
+
+Written to: ~/projects/payment-gateway/.gsd
+
+  [Run agent review]  [Done]
+```
+
+The review:
+
+1. Audits the output for GSD-2 standards compliance
+2. Checks file structure, frontmatter, task decomposition
+3. Identifies missing must-haves, incomplete summaries, or malformed plans
+4. Suggests fixes (but does not auto-fix)
+
+**When to use review:**
+
+- Complex v1 projects with many phases
+- Custom v1 formats (non-standard naming, unusual structure)
+- Before running `/gsd auto` on the migrated project
+
+**When to skip:**
+
+- Simple projects (1 milestone, few slices)
+- You plan to inspect manually
+- You're iterating on migration (testing multiple times)
+
+## Completion State Preservation
+
+The migration **preserves completion state**:
+
+- `[x]` phases in v1 roadmap → `[x]` slices in v2 roadmap
+- Phase with `summary.md` → Slice with `S0X-SUMMARY.md` (copied verbatim)
+- Tasks in v1 plan marked `[x]` → Tasks in v2 plan marked `[x]`
+
+You can continue from where v1 left off.
+
+## Research Consolidation
+
+v1 research files are scattered:
+
+```
+.planning/
+  research/
+    codebase-analysis.md
+    library-research.md
+    api-exploration.md
+```
+
+v2 consolidates them into **one research file per milestone**:
+
+```
+.gsd/milestones/M001/M001-RESEARCH.md
+```
+
+All research content is merged, with headers preserved.
+
+## Decision Extraction
+
+v1 stores decisions in multiple places:
+
+- `PROJECT.md` (architectural notes)
+- Phase summaries ("we decided to use X")
+- Inline comments in plans
+
+v2 extracts and consolidates them into **`.gsd/DECISIONS.md`** with timestamps.
+
+## Task Decomposition
+
+v1 phases often lack explicit task breakdown. v2 requires tasks.
+
+**If v1 plan has subtasks:**
+
+```markdown
+## Phase 1.0: Setup
+
+- [x] Initialize project structure
+- [x] Configure database
+- [ ] Set up CI/CD
+```
+
+**v2 converts to:**
+
+```markdown
+# S01: Setup
+
+## Tasks
+
+- [x] T01: Initialize project structure
+- [x] T02: Configure database
+- [ ] T03: Set up CI/CD
+```
+
+**If v1 plan has no subtasks:**
+
+The migration creates **one task per phase** (you can decompose further after migrating).
+
+## Multi-Milestone Projects
+
+If your v1 `ROADMAP.md` has milestone sections:
+
+```markdown
+## Milestone 1: Payment Integration
+
+- [x] 1.0: Stripe integration
+- [x] 1.1: PayPal integration
+- [ ] 1.2: Webhook handling
+
+## Milestone 2: User Management
+
+- [ ] 2.0: User signup
+- [ ] 2.1: User login
+```
+
+**v2 creates:**
+
+```
+.gsd/milestones/
+  M001-PAYMENT-INTEGRATION/
+    M001-ROADMAP.md
+    slices/
+      S01-stripe-integration/
+      S02-paypal-integration/
+      S03-webhook-handling/
+  M002-USER-MANAGEMENT/
+    M002-ROADMAP.md
+    slices/
+      S01-user-signup/
+      S02-user-login/
+```
+
+## Common Issues
+
+### Issue: "Directory not found"
+
+**Problem:** No `.planning/` directory at the specified path.
+
+**Fix:**
+
+```bash
+# Check if .planning exists
+ls -la ~/projects/my-project/.planning
+
+# If missing, you're not migrating a v1 project
+# Use /gsd for new projects instead
+```
+
+### Issue: "Fatal: Missing PROJECT.md"
+
+**Problem:** The `.planning/` directory exists but lacks core files.
+
+**Fix:**
+
+Ensure your v1 project has:
+
+```
+.planning/
+  PROJECT.md       ← Required
+  ROADMAP.md       ← Required
+  requirements.md  ← Optional
+  phases/          ← Optional (can be empty)
+```
+
+### Issue: "Phase numbers not sequential"
+
+**Problem:** Phase numbering like `01-`, `03-`, `05-` (missing 02, 04).
+
+**Fix:**
+
+Renumber phases to be sequential, or ignore the warning (migration proceeds anyway).
+
+### Issue: "Duplicate phase numbers across milestones"
+
+**Problem:** Phase `01-` appears in both Milestone 1 and Milestone 2.
+
+**Fix:**
+
+This is allowed if your roadmap uses `<details>` blocks or milestone headers. The migration scopes phases to their milestone.
+
+## After Migration
+
+### Validate the Output
+
+Run GSD doctor to check integrity:
+
+```bash
+/gsd doctor
+```
+
+If issues are found, fix them or run:
+
+```bash
+/gsd doctor fix
+```
+
+### Resume Work
+
+Pick up where you left off:
+
+```bash
+/gsd auto
+# Continues from the first incomplete slice
+```
+
+### Compare with v1
+
+Inspect the differences:
+
+```bash
+# Old structure
+ls .planning/
+
+# New structure
+ls .gsd/
+
+# Compare specific files
+diff .planning/phases/01-setup/plan.md .gsd/milestones/M001/slices/S01-setup/S01-PLAN.md
+```
+
+## Migration Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Backup First" icon="floppy-disk">
+    Copy `.planning/` to `.planning.backup` before migrating
+  </Card>
+  <Card title="Review Output" icon="eye">
+    Inspect `.gsd/` manually before running auto mode
+  </Card>
+  <Card title="Run Doctor" icon="stethoscope">
+    Use `/gsd doctor` to catch integrity issues
+  </Card>
+  <Card title="Test on Small Projects" icon="flask">
+    Try migration on a simple project first
+  </Card>
+</CardGroup>
+
+## Example Migration
+
+```bash
+$ cd ~/projects/payment-gateway
+$ ls -la
+drwxr-xr-x  .planning/
+drwxr-xr-x  src/
+-rw-r--r--  package.json
+
+$ gsd
+/gsd migrate
+
+🔍 Validating .planning/ directory...
+
+✓ Validation passed (2 warnings)
+
+  ⚠️  Phase 1.3 has no plan.md (treated as pending)
+  ⚠️  Research directory empty (no research files to migrate)
+
+🔄 Parsing v1 structure...
+
+  Found: 1 milestone, 8 phases, 24 tasks
+  Completion: 5/8 phases done (62%)
+
+🔍 Generating preview...
+
+┌─ Migration Preview ──────────────────────────────────────╮
+│                                                          │
+│  Milestones: 1                                            │
+│  Slices: 8 (5 done — 62%)                               │
+│  Tasks: 24 (15 done — 62%)                              │
+│  Requirements: 12 (8 validated, 3 active, 1 deferred)     │
+│                                                          │
+│  [Write .gsd/]  [Cancel]                                  │
+│                                                          │
+╰────────────────────────────────────────────────────────╯
+
+> Write .gsd/
+
+✓ Migration complete.
+
+Written to: ~/projects/payment-gateway/.gsd
+
+Run agent review to validate output?
+
+  [Run review]  [Done]
+
+> Done
+
+✓ Migration finished. Resume work:
+
+    /gsd auto
+
+  Or validate first:
+
+    /gsd doctor
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Doctor" icon="stethoscope" href="/commands/doctor">
+    Validate migrated project integrity
+  </Card>
+  <Card title="Auto Mode" icon="forward-fast" href="/commands/auto-mode">
+    Resume work after migration
+  </Card>
+  <Card title="Status" icon="gauge" href="/commands/status-queue">
+    Check migrated progress
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+1. Back up your v1 project: `cp -r .planning .planning.backup`
+2. Run migration: `/gsd migrate`
+3. Validate output: `/gsd doctor`
+4. Resume work: `/gsd auto`

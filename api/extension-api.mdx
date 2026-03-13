@@ -1,0 +1,285 @@
+---
+title: "ExtensionAPI"
+description: "Register tools, commands, hooks, and renderers to extend Pi"
+---
+
+## Overview
+
+`ExtensionAPI` is the primary interface for registering capabilities in your extension. It's passed to your default export function and provides methods to add tools, commands, event handlers, shortcuts, and more.
+
+```typescript
+export default function (pi: ExtensionAPI) {
+  pi.registerTool({ ... });
+  pi.registerCommand("mycommand", { ... });
+  pi.on("before_agent_start", async (event, ctx) => { ... });
+}
+```
+
+## Registering Tools
+
+<ParamField path="registerTool" type="(tool: Tool) => void">
+  Add a tool the LLM can invoke. Tools appear in the agent's tool palette.
+
+  ```typescript
+  pi.registerTool({
+    name: "read_file",
+    description: "Read a file from disk",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "File path" }
+      },
+      required: ["path"]
+    },
+    execute: async (toolCallId, params, signal, onUpdate, ctx) => {
+      const content = readFileSync(params.path, "utf-8");
+      return { type: "text", text: content };
+    }
+  });
+  ```
+
+  ### Tool Interface
+  - `name`: Tool identifier (lowercase, no spaces)
+  - `description`: What the tool does (shown to LLM)
+  - `inputSchema`: JSON Schema for parameters
+  - `execute`: Async handler that returns a tool result
+</ParamField>
+
+## Registering Commands
+
+<ParamField path="registerCommand" type="(name: string, config: CommandConfig) => void">
+  Add a slash command users can invoke:
+
+  ```typescript
+  pi.registerCommand("gsd", {
+    description: "GSD — Get Shit Done: /gsd next|auto|stop|status",
+    
+    getArgumentCompletions: (prefix: string) => {
+      const subcommands = ["next", "auto", "stop", "status"];
+      return subcommands
+        .filter(cmd => cmd.startsWith(prefix))
+        .map(cmd => ({ value: cmd, label: cmd }));
+    },
+
+    async handler(args: string, ctx: ExtensionCommandContext) {
+      if (args === "status") {
+        await ctx.ui.custom(/* render dashboard */);
+      }
+    }
+  });
+  ```
+
+  ### CommandConfig
+  - `description`: Help text shown in command palette
+  - `getArgumentCompletions`: Optional autocomplete function
+  - `handler`: Async function called when command is invoked
+
+  <Tip>
+    Use `getArgumentCompletions` for subcommand-style UX. See `/gsd` in the bundled extensions.
+  </Tip>
+</ParamField>
+
+## Event Hooks
+
+<ParamField path="on" type="(event: EventName, handler: EventHandler) => void">
+  Subscribe to lifecycle events:
+
+  ```typescript
+  pi.on("before_agent_start", async (event, ctx) => {
+    return { systemPrompt: `${event.systemPrompt}\n\nCustom instructions` };
+  });
+
+  pi.on("agent_end", async (event, ctx) => {
+    // Session complete — save logs, emit metrics, etc.
+  });
+
+  pi.on("session_start", async (event, ctx) => {
+    ctx.ui.notify("Extension loaded", "info");
+  });
+  ```
+
+  See [Hooks](/api/hooks) for all event types and patterns.
+</ParamField>
+
+## Shortcuts
+
+<ParamField path="registerShortcut" type="(key: Key, config: ShortcutConfig) => void">
+  Bind keyboard shortcuts:
+
+  ```typescript
+  import { Key } from "@mariozechner/pi-tui";
+
+  pi.registerShortcut(Key.ctrlAlt("g"), {
+    description: "Open GSD dashboard",
+    handler: async (ctx) => {
+      await ctx.ui.custom(/* overlay */);
+    }
+  });
+  ```
+
+  From `gsd/index.ts:193`:
+  ```typescript
+  pi.registerShortcut(Key.ctrlAlt("g"), {
+    description: "Open GSD dashboard",
+    handler: async (ctx) => {
+      await ctx.ui.custom(
+        (tui, theme, _kb, done) => {
+          return new GSDDashboardOverlay(tui, theme, () => done());
+        },
+        {
+          overlay: true,
+          overlayOptions: { width: "90%", anchor: "center" }
+        }
+      );
+    }
+  });
+  ```
+</ParamField>
+
+## Sending Messages
+
+<ParamField path="sendMessage" type="(message: Message, options?: SendOptions) => void">
+  Programmatically send a message to the agent:
+
+  ```typescript
+  pi.sendMessage(
+    { 
+      customType: "gsd-guided-context",
+      content: guidedPrompt,
+      display: false  // Don't show in chat history
+    },
+    { triggerTurn: true }  // Start agent immediately
+  );
+  ```
+
+  From `gsd/commands.ts:46`:
+  ```typescript
+  pi.sendMessage(
+    { customType: "gsd-doctor-heal", content, display: false },
+    { triggerTurn: true }
+  );
+  ```
+
+  <Note>
+    Set `display: false` for system-generated prompts that shouldn't appear in the user's chat history.
+  </Note>
+</ParamField>
+
+## Model Management
+
+<ParamField path="setModel" type="(model: Model) => Promise<void>">
+  Change the active model:
+
+  ```typescript
+  const model = ctx.modelRegistry.find("anthropic", "claude-opus-4-20250514");
+  if (model) await pi.setModel(model);
+  ```
+
+  From `gsd/auto.ts:275`:
+  ```typescript
+  // Restore user's original model after auto-mode
+  if (originalModelId) {
+    const original = ctx.modelRegistry.find("anthropic", originalModelId);
+    if (original) await pi.setModel(original);
+  }
+  ```
+</ParamField>
+
+## Tool Overrides
+
+Replace built-in tools with dynamic implementations:
+
+```typescript
+import { createBashTool } from "@mariozechner/pi-coding-agent";
+
+const baseBash = createBashTool(process.cwd(), {
+  spawnHook: (ctx) => ({ ...ctx, cwd: process.cwd() })
+});
+
+const dynamicBash = {
+  ...baseBash,
+  execute: async (toolCallId, params, signal, onUpdate, ctx) => {
+    // Inject default timeout
+    const paramsWithTimeout = {
+      ...params,
+      timeout: params.timeout ?? 120
+    };
+    return baseBash.execute(toolCallId, paramsWithTimeout, signal, onUpdate, ctx);
+  }
+};
+
+pi.registerTool(dynamicBash as any);
+```
+
+From `gsd/index.ts:78-104`: GSD wraps the bash tool to inject a 120-second default timeout and dynamically resolve `process.cwd()` for worktree support.
+
+## Custom Renderers
+
+<ParamField path="registerToolRenderer" type="(name: string, renderer: ToolRenderer) => void">
+  Customize how tool calls appear in the TUI:
+
+  ```typescript
+  pi.registerToolRenderer("my_tool", {
+    render: (toolCall, result, theme) => {
+      return `Custom rendering for ${toolCall.name}`;
+    }
+  });
+  ```
+</ParamField>
+
+## Example: Web Search Extension
+
+From `search-the-web/index.ts:54`:
+
+```typescript
+export default function (pi: ExtensionAPI) {
+  // Register multiple tools
+  registerSearchTool(pi);
+  registerFetchPageTool(pi);
+  registerLLMContextTool(pi);
+
+  // Register slash commands
+  registerSearchProviderCommand(pi);
+
+  // Register native Anthropic web search hooks
+  registerNativeSearchHooks(pi);
+}
+```
+
+## GSD Auto-Mode Pattern
+
+From `gsd/auto.ts:333`:
+
+```typescript
+export async function startAuto(
+  ctx: ExtensionCommandContext,
+  pi: ExtensionAPI,
+  base: string,
+  verboseMode: boolean
+) {
+  // Setup state
+  active = true;
+  cmdCtx = ctx;
+  
+  // Register UI widgets
+  ctx.ui.setStatus("gsd-auto", "auto");
+  ctx.ui.setFooter(hideFooter);
+  
+  // Dispatch first unit
+  await dispatchNextUnit(ctx, pi);
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="ExtensionContext" icon="cube" href="/api/extension-context">
+    Access session and UI state
+  </Card>
+  <Card title="Hooks" icon="webhook" href="/api/hooks">
+    Event lifecycle and hook patterns
+  </Card>
+  <Card title="Context Injection" icon="message-code" href="/api/context-injection">
+    Inject context into LLM prompts
+  </Card>
+</CardGroup>

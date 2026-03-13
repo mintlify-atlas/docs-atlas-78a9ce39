@@ -1,0 +1,565 @@
+---
+title: Custom Extensions
+description: How to create GSD extensions using Pi SDK patterns
+---
+
+GSD extensions are Pi SDK extensions that add tools, commands, hooks, and UI components to the agent environment. This guide shows how to create your own.
+
+## Extension Structure
+
+A minimal extension:
+
+```
+my-extension/
+  package.json
+  index.ts
+  tsconfig.json
+```
+
+### package.json
+
+```json
+{
+  "name": "my-extension",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.1.0",
+    "@sinclair/typebox": "^0.32.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
+```
+
+### index.ts
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+
+export default function (pi: ExtensionAPI) {
+  // Register tools, commands, hooks, shortcuts
+  console.log("My extension loaded");
+}
+```
+
+### tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "outDir": "dist",
+    "declaration": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+## Registering Tools
+
+Tools are agent-callable functions:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "example_tool",
+    label: "Example Tool",
+    description: "What this tool does and when to use it",
+    promptGuidelines: [
+      "Use this tool when...",
+      "Always check X before calling",
+      "The result includes Y and Z"
+    ],
+    parameters: Type.Object({
+      input: Type.String({ description: "Input parameter" }),
+      count: Type.Optional(Type.Number({ description: "Optional count" }))
+    }),
+
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      // Implementation
+      const result = await doSomething(params.input, params.count);
+
+      // Return structured result
+      return {
+        content: [{ type: "text", text: `Result: ${result}` }],
+        details: { raw: result }
+      };
+    },
+
+    renderCall(args, theme) {
+      // Custom tool call rendering (optional)
+      return new Text(
+        theme.fg("toolTitle", theme.bold("example_tool ")) +
+        theme.fg("accent", args.input),
+        0, 0
+      );
+    },
+
+    renderResult(result, options, theme) {
+      // Custom result rendering (optional)
+      const text = result.content[0];
+      return new Text(
+        text?.type === "text" ? text.text : "(no output)",
+        0, 0
+      );
+    }
+  });
+}
+```
+
+**Key points:**
+- `name` — Tool identifier (use snake_case)
+- `description` — What the tool does (shows in tool catalog)
+- `promptGuidelines` — When/how to use the tool (injected into system prompt)
+- `parameters` — TypeBox schema for tool parameters
+- `execute` — Tool implementation (async function)
+- `signal` — AbortSignal for cancellation
+- `onUpdate` — Streaming updates callback (optional)
+- `ctx` — Extension context (UI, cwd, session manager)
+
+## Registering Commands
+
+Commands are user-invoked slash commands:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerCommand("example", {
+    description: "Do something useful",
+    handler: async (args, ctx) => {
+      // args is the raw string after the command
+      // ctx provides UI, cwd, session manager
+
+      // Show notification
+      ctx.ui.notify("Command executed", "info");
+
+      // Prompt user
+      const confirmed = await ctx.ui.confirm(
+        "Proceed?",
+        "This will do X. Continue?"
+      );
+
+      if (!confirmed) return;
+
+      // Do work
+      await doSomething();
+
+      // Report result
+      ctx.ui.notify("Done", "success");
+    }
+  });
+}
+```
+
+**Available in `ctx.ui`:**
+- `notify(message, level)` — Show notification ("info" | "success" | "warning" | "error")
+- `confirm(title, message)` — Yes/no prompt
+- `input(prompt, initialValue?)` — Text input
+- `select(title, options)` — Single-select from list
+- `multiSelect(title, options)` — Multi-select from list
+- `custom<T>(renderFn, options)` — Custom TUI component
+
+## Registering Keyboard Shortcuts
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Key } from "@mariozechner/pi-tui";
+import { shortcutDesc } from "./shared/terminal.js";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerShortcut(Key.ctrlAlt("e"), {
+    description: shortcutDesc("Run example", "/example"),
+    handler: async (ctx) => {
+      // Same as command handler
+      await doSomething();
+    }
+  });
+}
+```
+
+**Available key constructors:**
+- `Key.ctrl("c")` — Ctrl+C
+- `Key.ctrlAlt("g")` — Ctrl+Alt+G
+- `Key.escape` — Escape
+- `Key.enter` — Enter
+- `Key.up`, `Key.down`, `Key.left`, `Key.right` — Arrow keys
+
+## Registering Hooks
+
+Hooks are lifecycle listeners:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  // Session start
+  pi.on("session_start", async (event, ctx) => {
+    console.log("Session started");
+  });
+
+  // Before agent starts
+  pi.on("before_agent_start", async (event, ctx) => {
+    // Modify system prompt or inject message
+    return {
+      systemPrompt: `${event.systemPrompt}\n\nAdditional context`,
+      message: {
+        customType: "example-context",
+        content: "Injected message",
+        display: false // Hide from UI
+      }
+    };
+  });
+
+  // Agent end
+  pi.on("agent_end", async (event, ctx) => {
+    const lastMsg = event.messages[event.messages.length - 1];
+    console.log("Agent finished", lastMsg.stopReason);
+  });
+
+  // Before context compaction
+  pi.on("session_before_compact", async (event, ctx) => {
+    // Save session state before compaction
+    await saveState();
+
+    // Cancel compaction
+    return { cancel: true };
+  });
+
+  // Session shutdown
+  pi.on("session_shutdown", async (event, ctx) => {
+    // Cleanup before exit
+    await cleanup();
+  });
+}
+```
+
+**Available hooks:**
+- `session_start` — After session initialization
+- `before_agent_start` — Before agent processes user message (can inject context)
+- `agent_end` — After agent finishes responding
+- `session_before_compact` — Before context compaction (can cancel)
+- `session_shutdown` — Before process exit
+
+## Creating Dynamic Tools
+
+Tools that wrap other commands (like the GSD extension's bash/read/write wrappers):
+
+```typescript
+import { createBashTool } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  const baseBash = createBashTool(process.cwd());
+
+  // Wrap execute to add custom behavior
+  const enhancedBash = {
+    ...baseBash,
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      // Pre-processing
+      console.log("Running command:", params.command);
+
+      // Call original
+      const result = await baseBash.execute(
+        toolCallId,
+        params,
+        signal,
+        onUpdate,
+        ctx
+      );
+
+      // Post-processing
+      console.log("Command finished");
+
+      return result;
+    }
+  };
+
+  pi.registerTool(enhancedBash as any);
+}
+```
+
+## Loading Extensions
+
+### User-Global Extensions
+
+Place in `~/.pi/extensions/`:
+
+```bash
+mkdir -p ~/.pi/extensions/my-extension
+cd ~/.pi/extensions/my-extension
+
+# Copy your extension files
+cp -r /path/to/my-extension/* .
+
+# Build
+npm install
+npm run build
+```
+
+GSD loads user extensions automatically.
+
+### Project-Local Extensions
+
+Place in `.gsd/extensions/`:
+
+```bash
+mkdir -p .gsd/extensions/my-extension
+cd .gsd/extensions/my-extension
+
+# Copy your extension files
+cp -r /path/to/my-extension/* .
+
+# Build
+npm install
+npm run build
+
+# Commit to repo
+git add .gsd/extensions/
+git commit -m "Add project extension"
+```
+
+Project extensions are version-controlled. Team members get them automatically.
+
+## Extension Discovery
+
+GSD discovers extensions in this order:
+
+1. Bundled extensions (`~/.gsd/agent/extensions/`) — always-overwrite synced
+2. User extensions (`~/.pi/extensions/`) — loaded as-is
+3. Project extensions (`.gsd/extensions/`) — loaded as-is
+
+If two extensions register the same tool/command, the last one wins (project > user > bundled).
+
+## Example: Code Formatter Extension
+
+A complete example that adds a `format_code` tool:
+
+```typescript
+// index.ts
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "format_code",
+    label: "Format Code",
+    description: "Format code files using prettier",
+    promptGuidelines: [
+      "Use this tool after editing files to ensure consistent formatting",
+      "Supports JavaScript, TypeScript, JSON, Markdown, and more"
+    ],
+    parameters: Type.Object({
+      files: Type.Array(Type.String(), {
+        description: "File paths to format"
+      }),
+      check: Type.Optional(Type.Boolean({
+        description: "Check formatting without modifying files",
+        default: false
+      }))
+    }),
+
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const args = ["--write", ...params.files];
+      if (params.check) {
+        args[0] = "--check";
+      }
+
+      try {
+        const { stdout, stderr } = await execFileAsync(
+          "prettier",
+          args,
+          { cwd: ctx.cwd, signal }
+        );
+
+        return {
+          content: [{
+            type: "text",
+            text: params.check
+              ? "All files are formatted correctly"
+              : `Formatted ${params.files.length} file(s)`
+          }],
+          details: { stdout, stderr }
+        };
+      } catch (err: any) {
+        return {
+          content: [{
+            type: "text",
+            text: `Format failed: ${err.message}`
+          }],
+          details: { error: err.message },
+          isError: true
+        };
+      }
+    }
+  });
+
+  // Add command shortcut
+  pi.registerCommand("format", {
+    description: "Format all project files",
+    handler: async (args, ctx) => {
+      ctx.ui.notify("Formatting all files...", "info");
+      // Implementation
+    }
+  });
+}
+```
+
+## Testing Extensions
+
+### Manual Testing
+
+```bash
+# Build your extension
+cd ~/.pi/extensions/my-extension
+npm run build
+
+# Launch GSD
+gsd
+
+# Test tool
+subagent({
+  agent: "worker",
+  task: "Call the example_tool with input='test'"
+})
+
+# Test command
+/example
+```
+
+### Automated Testing
+
+Create a test file:
+
+```typescript
+// test.ts
+import { describe, it, expect } from "vitest";
+import extension from "./index.js";
+
+describe("My Extension", () => {
+  it("registers tools", () => {
+    const tools: any[] = [];
+    const mockPi = {
+      registerTool: (tool: any) => tools.push(tool),
+      registerCommand: () => {},
+      on: () => {}
+    };
+
+    extension(mockPi as any);
+
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe("example_tool");
+  });
+});
+```
+
+## Best Practices
+
+### 1. Namespace Tool Names
+
+Prefix tool names to avoid collisions:
+
+**Good:**
+- `myext_format_code`
+- `myext_run_tests`
+
+**Bad:**
+- `format` (could collide with another extension)
+- `run` (too generic)
+
+### 2. Provide Clear Prompt Guidelines
+
+The agent needs to know when to use your tool:
+
+**Good:**
+```typescript
+promptGuidelines: [
+  "Use this tool to format code files after editing",
+  "Supports JS, TS, JSON, MD, CSS",
+  "Automatically detects project config (.prettierrc)"
+]
+```
+
+**Bad:**
+```typescript
+promptGuidelines: ["Formats code"]
+```
+
+### 3. Handle Errors Gracefully
+
+Always return structured errors:
+
+```typescript
+try {
+  const result = await doSomething();
+  return { content: [{ type: "text", text: result }] };
+} catch (err: any) {
+  return {
+    content: [{ type: "text", text: `Failed: ${err.message}` }],
+    details: { error: err.message, stack: err.stack },
+    isError: true
+  };
+}
+```
+
+### 4. Support Cancellation
+
+Respect the `signal` parameter:
+
+```typescript
+async execute(toolCallId, params, signal, onUpdate, ctx) {
+  const proc = spawn("long-running-command", [], { signal });
+
+  // If signal is aborted, process will be killed
+  const result = await waitForProcess(proc);
+
+  return { content: [{ type: "text", text: result }] };
+}
+```
+
+### 5. Use Streaming for Long Operations
+
+Call `onUpdate` to show progress:
+
+```typescript
+async execute(toolCallId, params, signal, onUpdate, ctx) {
+  for (let i = 0; i < 10; i++) {
+    await doStep(i);
+
+    // Update progress
+    onUpdate?.({
+      content: [{ type: "text", text: `Step ${i + 1}/10 complete` }]
+    });
+  }
+
+  return { content: [{ type: "text", text: "All steps complete" }] };
+}
+```
+
+## Pi SDK Documentation
+
+For the complete Pi SDK API reference, see:
+
+- [Pi SDK GitHub](https://github.com/badlogic/pi-mono)
+- [Extension API Types](https://github.com/badlogic/pi-mono/tree/main/packages/pi-coding-agent/src/types)
+- [Bundled Extensions Source](https://github.com/gsd-build/GSD-2/tree/main/src/resources/extensions)
